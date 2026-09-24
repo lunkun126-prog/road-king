@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ROAD_HALF, LANE_W, LANES, STEP, lightState, rng } from './road.js';
+import { cloneModel } from './models.js';
 
 const CH = 100; // 块长
 const RW = ROAD_HALF + 0.4; // 路面半宽
@@ -111,6 +112,79 @@ function boxUV(bw, bh, bd) {
   return g;
 }
 
+// ---------- 场景剖面 ----------
+// 每列 {d: 离路边距离, y: (路面高度)=>高度, c: 颜色}，d 从 0 往外
+function sideProfile(scenery, sg, snow) {
+  const W = (c, sc) => (snow ? sc : c);
+  const walk = W(0xa9acae, 0xdfe4ea), grass = W(0x7da35c, 0xf1f4f7), far = W(0x6f8f5a, 0xe4e9ee);
+  if (scenery === 'highway') {
+    if (sg < 0) return [ // 左侧：沙滩 → 海
+      { d: 0, y: (y) => y + 0.05, c: 0x8a8d90 }, { d: 2.5, y: (y) => y + 0.05, c: 0x8a8d90 },
+      { d: 7, y: (y) => y - 1.2, c: W(0xd9c38f, 0xeef1f4) }, { d: 16, y: () => -5.2, c: W(0xe3cf9d, 0xe8ecef) },
+      { d: 40, y: () => -6.2, c: W(0xcdb57f, 0xdfe5ea) },
+    ];
+    return [
+      { d: 0, y: (y) => y + 0.05, c: 0x8a8d90 }, { d: 2.5, y: (y) => y + 0.05, c: 0x8a8d90 },
+      { d: 2.51, y: (y) => y, c: grass }, { d: 70, y: (y) => y * 0.6 - 0.5, c: W(0x94b35e, 0xeef1f4) }, { d: 200, y: () => -9, c: far },
+    ];
+  }
+  if (scenery === 'mountain') {
+    const rock = W(0x7d7466, 0x9a9690), rockHi = W(0x8e8577, 0xf3f5f7);
+    if (sg > 0) return [ // 右侧：山壁
+      { d: 0, y: (y) => y + 0.05, c: 0x8d8a83 }, { d: 1.5, y: (y) => y + 0.25, c: 0x8d8a83 },
+      { d: 4, y: (y) => y + 6, c: rock }, { d: 14, y: (y) => y + 22, c: rock }, { d: 45, y: (y) => y + 48, c: rockHi },
+    ];
+    return [ // 左侧：下坡的松林
+      { d: 0, y: (y) => y + 0.05, c: 0x8d8a83 }, { d: 2, y: (y) => y, c: W(0x5f7f45, 0xeef2f5) },
+      { d: 12, y: (y) => y - 9, c: W(0x4d6b3a, 0xe6ebef) }, { d: 60, y: (y) => y - 38, c: W(0x3f5a30, 0xdde3e8) }, { d: 220, y: () => -70, c: W(0x3a522c, 0xd8dfe5) },
+    ];
+  }
+  return [
+    { d: 0, y: (y) => y + 0.05, c: walk }, { d: 4, y: (y) => y + 0.05, c: walk },
+    { d: 4.01, y: (y) => y, c: grass }, { d: 60, y: (y) => y * 0.6 - 0.5, c: grass }, { d: 180, y: () => -9, c: far },
+  ];
+}
+
+// 剖面上离路边 d 米处的地面高度
+function profileY(prof, d, y) {
+  for (let i = 1; i < prof.length; i++) {
+    if (d <= prof[i].d) {
+      const a = prof[i - 1], b = prof[i], t = (d - a.d) / Math.max(1e-6, b.d - a.d);
+      return a.y(y) + (b.y(y) - a.y(y)) * t;
+    }
+  }
+  return prof[prof.length - 1].y(y);
+}
+
+// ---------- 树（多层松树 / 团簇阔叶树）----------
+function treeGeo(r, kind, snow) {
+  const parts = [];
+  const trunkC = new THREE.Color(0x5b4030);
+  if (kind === 'pine') {
+    const h = 6 + r() * 6, rad = 1.4 + r() * 0.9;
+    parts.push(withColor(new THREE.CylinderGeometry(0.18, 0.28, h * 0.35, 6).translate(0, h * 0.17, 0), trunkC));
+    const tiers = 4;
+    for (let i = 0; i < tiers; i++) {
+      const k = i / tiers, th = h * 0.38, rr = rad * (1 - k * 0.7);
+      const c = new THREE.Color().setHSL(0.3 + r() * 0.04, 0.4, 0.2 + r() * 0.06 + k * 0.04);
+      if (snow) c.lerp(new THREE.Color(0xf4f7fa), 0.55 - k * 0.2);
+      parts.push(withColor(new THREE.ConeGeometry(rr, th, 8).translate(0, h * 0.25 + i * h * 0.17 + th / 2, 0), c));
+    }
+  } else {
+    const h = 3 + r() * 3;
+    parts.push(withColor(new THREE.CylinderGeometry(0.16, 0.26, h, 6).translate(0, h / 2, 0), trunkC));
+    const n = 4 + Math.floor(r() * 3);
+    for (let i = 0; i < n; i++) {
+      const rr = 1 + r() * 0.9;
+      const c = new THREE.Color().setHSL(0.24 + r() * 0.08, 0.42 + r() * 0.15, 0.26 + r() * 0.12);
+      if (snow) c.lerp(new THREE.Color(0xeef2f5), 0.6);
+      const a = r() * 6.28, rd = i ? 0.9 + r() * 0.6 : 0;
+      parts.push(withColor(new THREE.IcosahedronGeometry(rr, 0).translate(Math.cos(a) * rd, h + 0.3 + r() * 1.4, Math.sin(a) * rd), c));
+    }
+  }
+  return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)));
+}
+
 // ---------- 车辆模型 ----------
 const GEO = {};
 function geo(key, make) { return GEO[key] || (GEO[key] = make()); }
@@ -135,8 +209,27 @@ function addWheels(group, w, l, r = 0.36, n = 2) {
   }
 }
 
-// 返回 {group, body, tail, blinkL, blinkR, head}
-export function buildVehicle(kind, color) {
+// 骑手(代码画，趴在仿赛上)
+function addRider(G, suit, y, z) {
+  const m = lambert(suit), dark = mat('riderDark', () => lambert(0x1c1f24));
+  const torso = new THREE.Mesh(geo('rtorso', () => new THREE.BoxGeometry(0.42, 0.62, 0.3)), m);
+  torso.position.set(0, y + 0.42, z + 0.05); torso.rotation.x = -0.9; G.add(torso);
+  const helm = new THREE.Mesh(geo('rhelm', () => new THREE.SphereGeometry(0.17, 12, 10)), m);
+  helm.position.set(0, y + 0.72, z - 0.3); G.add(helm);
+  const visor = new THREE.Mesh(geo('rvisor', () => new THREE.SphereGeometry(0.175, 12, 10, Math.PI * 0.6, Math.PI * 0.8, Math.PI * 0.35, Math.PI * 0.35)), mat('visor', () => lambert(0x111822)));
+  visor.position.copy(helm.position); G.add(visor);
+  for (const sx of [-1, 1]) {
+    const arm = new THREE.Mesh(geo('rarm', () => new THREE.BoxGeometry(0.11, 0.11, 0.55)), m);
+    arm.position.set(sx * 0.22, y + 0.5, z - 0.38); arm.rotation.x = 0.5; G.add(arm);
+    const thigh = new THREE.Mesh(geo('rthigh', () => new THREE.BoxGeometry(0.15, 0.15, 0.5)), dark);
+    thigh.position.set(sx * 0.2, y + 0.12, z + 0.1); thigh.rotation.x = -0.3; G.add(thigh);
+    const shin = new THREE.Mesh(geo('rshin', () => new THREE.BoxGeometry(0.13, 0.45, 0.13)), dark);
+    shin.position.set(sx * 0.21, y - 0.1, z + 0.38); shin.rotation.x = 0.6; G.add(shin);
+  }
+}
+
+// 返回 {group, body, tail, blinkL, blinkR, head}；modelId 有对应 glb 时用真实模型
+export function buildVehicle(kind, color, modelId, riderSuit) {
   const G = new THREE.Group();
   const body = lambert(color);
   const glass = mat('glass', () => lambert(0x1b2633));
@@ -146,7 +239,23 @@ export function buildVehicle(kind, color) {
   const head = new THREE.MeshLambertMaterial({ color: 0xdddddd, emissive: 0xfff4c0, emissiveIntensity: 0.3 });
   const parts = { group: G, body, tail, blinkL, blinkR, head };
   let w = 1.85, l = 4.4, lampY = 0.75;
-  if (kind === 'car' || kind === 'sedan' || kind === 'sport') {
+  const model = modelId ? cloneModel(modelId, color) : null;
+  if (model) {
+    G.add(model);
+    const b = model.userData.box;
+    w = b.max.x - b.min.x; l = b.max.z - b.min.z;
+    const h = b.max.y - b.min.y;
+    lampY = b.min.y + h * (kind === 'moto' ? 0.5 : 0.38);
+    parts.model = true;
+    if (kind === 'moto') {
+      if (riderSuit != null) addRider(G, riderSuit, b.min.y + h * 0.62, 0.05);
+      addBox(G, tail, 0.16, 0.08, 0.04, 0, lampY, b.max.z + 0.01);
+      addBox(G, head, 0.18, 0.12, 0.04, 0, lampY + 0.1, b.min.z - 0.01);
+      addBox(G, blinkL, 0.06, 0.06, 0.04, -0.14, lampY, b.max.z + 0.01);
+      addBox(G, blinkR, 0.06, 0.06, 0.04, 0.14, lampY, b.max.z + 0.01);
+      return parts;
+    }
+  } else if (kind === 'car' || kind === 'sedan' || kind === 'sport') {
     const low = kind === 'sport';
     w = low ? 1.95 : 1.85; l = low ? 4.5 : 4.4;
     addBox(G, body, w, low ? 0.55 : 0.7, l, 0, low ? 0.5 : 0.62, 0);
@@ -209,6 +318,27 @@ export function buildVehicle(kind, color) {
   return parts;
 }
 
+function buildPed(p) {
+  const G = new THREE.Group();
+  const s = p.h / 1.7;
+  const skin = mat('skin', () => lambert(0xe0b594));
+  const shirt = lambert(p.shirt), pants = lambert(p.pants);
+  const limb = (m, w, h, x, y) => {
+    const pivot = new THREE.Group(); pivot.position.set(x, y, 0);
+    const mesh = new THREE.Mesh(geo(`limb${w}_${h}`, () => new THREE.BoxGeometry(w, h, w).translate(0, -h / 2, 0)), m);
+    pivot.add(mesh); G.add(pivot); return pivot;
+  };
+  const legL = limb(pants, 0.16 * s, 0.85 * s, -0.1 * s, 0.85 * s), legR = limb(pants, 0.16 * s, 0.85 * s, 0.1 * s, 0.85 * s);
+  const torso = new THREE.Mesh(geo('torso' + s.toFixed(2), () => new THREE.BoxGeometry(0.42 * s, 0.62 * s, 0.24 * s)), shirt);
+  torso.position.y = 1.16 * s; G.add(torso);
+  const armL = limb(shirt, 0.12 * s, 0.62 * s, -0.28 * s, 1.44 * s), armR = limb(shirt, 0.12 * s, 0.62 * s, 0.28 * s, 1.44 * s);
+  const head = new THREE.Mesh(geo('head', () => new THREE.SphereGeometry(0.13, 10, 8)), skin);
+  head.position.y = 1.62 * s; head.scale.setScalar(s); G.add(head);
+  const hair = new THREE.Mesh(geo('hair', () => new THREE.SphereGeometry(0.135, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)), mat('hairM', () => lambert(0x2b1d14)));
+  hair.position.y = 1.64 * s; hair.scale.setScalar(s); G.add(hair);
+  return { group: G, legL, legR, armL, armR };
+}
+
 function buildCones(len) {
   const G = new THREE.Group();
   const cm = mat('cone', () => lambert(0xff6a00));
@@ -248,7 +378,8 @@ export class World {
       ground: lambert(0xffffff, { vertexColors: true }),
       rail: lambert(0xb9c0c8, { side: THREE.DoubleSide }),
       bld: new THREE.MeshLambertMaterial({ map: this.tex.win, vertexColors: true, emissive: 0xffffff, emissiveMap: this.tex.winE, emissiveIntensity: 0 }),
-      tree: lambert(0xffffff, { vertexColors: true }),
+      tree: lambert(0xffffff, { vertexColors: true, flatShading: true }),
+      water: new THREE.MeshLambertMaterial({ color: 0x2c7fb8, emissive: 0x0b3a5c, emissiveIntensity: 0.35, vertexColors: true }),
       pole: lambert(0x6b737c),
       lamp: new THREE.MeshLambertMaterial({ color: 0x888888, emissive: 0xffe2a0, emissiveIntensity: 0 }),
       paint: lambert(0xf2f2ea, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
@@ -291,6 +422,94 @@ export class World {
     this.game = game;
     this.camInit = false;
     this.finishMesh = null;
+    this.scenery = game.mode === 'king' ? game.map.id : 'city';
+    this.snow = game.weather.id === 'snow';
+    this.m.road.color.set(game.weather.id === 'rain' ? 0x8e939b : this.snow ? 0xd6dbe0 : 0xffffff);
+    for (const [, o] of this.coinMeshes || []) this.scene.remove(o);
+    for (const [, o] of this.pedMeshes || []) this.scene.remove(o.group);
+    this.coinMeshes = new Map();
+    this.pedMeshes = new Map();
+    this.setupWeather(game.weather.id);
+  }
+
+  setupWeather(kind) {
+    if (this.precip) { this.scene.remove(this.precip); this.precip.geometry.dispose(); this.precip = null; }
+    this.precipKind = kind;
+    if (kind === 'clear') return;
+    const n = kind === 'rain' ? 4000 : 3000;
+    const pos = new Float32Array(n * (kind === 'rain' ? 6 : 3));
+    for (let i = 0; i < n; i++) {
+      const x = (Math.random() - 0.5) * 70, y = Math.random() * 30, z = (Math.random() - 0.5) * 70;
+      if (kind === 'rain') pos.set([x, y, z, x, y - 0.7, z], i * 6); else pos.set([x, y, z], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.precip = kind === 'rain'
+      ? new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xaec4d8, transparent: true, opacity: 0.55 }))
+      : new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.09, transparent: true, opacity: 0.95, depthWrite: false, map: canvasTex(32, 32, (c) => { const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, 32, 32); }, false) }));
+    this.precip.frustumCulled = false;
+    this.scene.add(this.precip);
+  }
+
+  updateWeather(dt, speed) {
+    if (!this.precip) return;
+    const a = this.precip.geometry.attributes.position, arr = a.array;
+    const rain = this.precipKind === 'rain', stride = rain ? 6 : 3;
+    const fall = rain ? 26 : 1.6, n = arr.length / stride, t = performance.now() / 1000;
+    const c = this.camera.position;
+    for (let i = 0; i < n; i++) {
+      const o = i * stride;
+      arr[o + 1] -= fall * dt;
+      if (!rain) { arr[o] += Math.sin(t + i) * 0.6 * dt; arr[o + 2] += Math.cos(t * 0.7 + i) * 0.6 * dt; }
+      // 以相机为中心的 70m 盒子里循环
+      let x = arr[o] - c.x, z = arr[o + 2] - c.z, y = arr[o + 1] - c.y;
+      if (y < -4) y += 30;
+      if (x < -35) x += 70; if (x > 35) x -= 70; if (z < -35) z += 70; if (z > 35) z -= 70;
+      arr[o] = c.x + x; arr[o + 1] = c.y + y; arr[o + 2] = c.z + z;
+      if (rain) { arr[o + 3] = arr[o] - 0.02 * speed; arr[o + 4] = arr[o + 1] - 0.8; arr[o + 5] = arr[o + 2]; }
+    }
+    a.needsUpdate = true;
+  }
+
+  syncCoins(g, dt) {
+    const seen = new Set(), t = g.t;
+    for (const c of g.coins) {
+      seen.add(c.id);
+      let m = this.coinMeshes.get(c.id);
+      if (!m) {
+        m = new THREE.Mesh(geo('coin', () => new THREE.CylinderGeometry(0.42, 0.42, 0.09, 20).rotateX(Math.PI / 2)), mat('coinM', () => new THREE.MeshLambertMaterial({ color: 0xffc21a, emissive: 0x7a4f00, emissiveIntensity: 0.9 })));
+        this.scene.add(m); this.coinMeshes.set(c.id, m);
+      }
+      g.road.toWorld(c.s, c.x, _p);
+      const up = c.taken ? (t - c.takenT) * 6 : 0;
+      m.position.set(_p.x, _p.y + 1 + Math.sin(t * 3 + c.id) * 0.12 + up, _p.z);
+      m.rotation.y = t * 3 + c.id;
+      m.scale.setScalar(c.taken ? Math.max(0.01, 1 - (t - c.takenT) * 2) : 1);
+    }
+    for (const [id, m] of this.coinMeshes) if (!seen.has(id)) { this.scene.remove(m); this.coinMeshes.delete(id); }
+  }
+
+  syncPeds(g) {
+    const seen = new Set();
+    for (const p of g.peds) {
+      seen.add(p.id);
+      let o = this.pedMeshes.get(p.id);
+      if (!o) { o = buildPed(p); this.scene.add(o.group); this.pedMeshes.set(p.id, o); }
+      g.road.toWorld(p.s, p.x, _p);
+      const G = o.group;
+      G.position.set(_p.x, _p.y + (this.scenery === 'city' && Math.abs(p.x) > RW ? 0.05 : 0), _p.z);
+      const face = p.kind === 'walk' ? (p.vs > 0 ? 0 : Math.PI) : p.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
+      G.rotation.set(0, -_p.h + face, 0);
+      if (p.hit) {
+        G.position.y += p.hit.y;
+        G.rotation.x = p.hit.rx; G.rotation.z = p.hit.rz;
+        o.legL.rotation.x = o.legR.rotation.x = 0.3; o.armL.rotation.x = -1.2; o.armR.rotation.x = 1.4;
+      } else {
+        const sw = Math.sin(p.phase) * 0.6;
+        o.legL.rotation.x = sw; o.legR.rotation.x = -sw; o.armL.rotation.x = -sw * 0.8; o.armR.rotation.x = sw * 0.8;
+      }
+    }
+    for (const [id, o] of this.pedMeshes) if (!seen.has(id)) { this.scene.remove(o.group); this.pedMeshes.delete(id); }
   }
 
   disposeChunk(c) {
@@ -309,23 +528,23 @@ export class World {
 
     // 路面
     G.add(new THREE.Mesh(ribbon(road, s0, s1, [{ x: -RW, u: 0 }, { x: RW, u: 1 }], 10), this.m.road));
-    // 人行道 + 地面(外沿逐渐下沉，接上远处平地)
-    const side = (sg) => {
-      const xs = [RW, RW + 4, RW + 4.01, RW + 60, RW + 180].map((v) => v * sg);
-      const ys = [(y) => y + 0.05, (y) => y + 0.05, (y) => y, (y) => y * 0.6 - 0.5, () => -9];
-      const cols = xs.map((x, i) => ({ x, y: ys[i] }));
-      if (sg < 0) cols.reverse();
+    // 路边地面：剖面随地图变化(城市人行道草地 / 高速海滩 / 盘山山壁与松林)
+    const sc = this.scenery, snow = this.snow;
+    const profs = {};
+    for (const sg of [-1, 1]) {
+      const prof = (profs[sg] = sideProfile(sc, sg, snow));
+      let cols = prof.map((p) => ({ x: sg * (RW + p.d), y: p.y }));
+      if (sg < 0) cols = cols.reverse();
       const g = ribbon(road, s0, s1, cols, 10);
-      const col = g.attributes.color;
-      const n = cols.length;
+      const col = g.attributes.color, n = cols.length, c = new THREE.Color();
       for (let i = 0; i < col.count; i++) {
         const k = sg < 0 ? n - 1 - (i % n) : i % n;
-        const c = new THREE.Color(k < 2 ? 0xa9acae : k < 4 ? 0x7da35c : 0x6f8f5a);
-        col.setXYZ(i, c.r, c.g, c.b);
+        c.set(prof[k].c); col.setXYZ(i, c.r, c.g, c.b);
       }
       G.add(new THREE.Mesh(g, this.m.ground));
-    };
-    side(1); side(-1);
+    }
+    if (sc === 'highway') G.add(new THREE.Mesh(ribbon(road, s0, s1, [{ x: -(RW + 700), y: () => -5.6 }, { x: -(RW + 13), y: () => -5.6 }], 40), this.m.water));
+    const groundAt = (s, sg, d) => { road.at(s, _p); return profileY(profs[sg], d, _p.y) - _p.y; };
 
     // 护栏(路口断开)
     const runs = [];
@@ -379,35 +598,35 @@ export class World {
 
     // 楼房 / 树 / 路灯
     const blds = [], trees = [], poles = [], lamps = [];
+    const bldP = sc === 'city' ? 0.8 : sc === 'highway' ? 0.12 : 0;
+    const addTrees = (s, sg, d0, d1, n, kind) => {
+      for (let k = 0; k < n; k++) {
+        const ss = s + (r() - 0.5) * 14, d = d0 + r() * (d1 - d0);
+        trees.push(placed(treeGeo(r, kind || (r() < 0.45 ? 'pine' : 'broad'), snow), road, ss, sg * (RW + d), groundAt(ss, sg, d) - 0.1, r() * 6.28));
+      }
+    };
     for (const sg of [-1, 1]) {
       let s = s0 + r() * 8;
       while (s < s1) {
         const bw = 10 + r() * 12;
         if (!nearLight(s + bw / 2, 22 + bw / 2)) {
-          if (r() < 0.8) {
+          if (sc === 'highway' && sg < 0) { if (r() < 0.25) addTrees(s, sg, 4, 7, 1, 'broad'); }
+          else if (sc === 'mountain') addTrees(s, sg, sg > 0 ? 2.5 : 4, sg > 0 ? 3.5 : 40, sg > 0 ? (r() < 0.3 ? 1 : 0) : 3 + Math.floor(r() * 3), 'pine');
+          else if (r() < bldP) {
             // x=横向进深 bd，z=沿路长度 bw
-            const bh = 12 + r() * r() * 70, bd = 10 + r() * 12;
+            const bh = sc === 'city' ? 12 + r() * r() * 70 : 6 + r() * 10, bd = 10 + r() * 12;
             const gb = withColor(boxUV(bd, bh, bw).translate(0, bh / 2 - 1, 0), new THREE.Color().setHSL([0.08, 0.1, 0.55, 0.58, 0.5, 0.02, 0.62][Math.floor(r() * 7)] + r() * 0.03, 0.18 + r() * 0.3, 0.5 + r() * 0.25));
-            const lat = sg * (RW + 12 + r() * 10 + bd / 2);
-            road.at(s + bw / 2, _p);
-            blds.push(placed(gb, road, s + bw / 2, lat, Math.min(0, _p.y * 0.6 - 0.5 - _p.y)));
-          } else {
-            for (let k = 0; k < 3; k++) {
-              const th = 3 + r() * 3;
-              const tg = mergeGeometries([
-                withColor(new THREE.CylinderGeometry(0.2, 0.25, 1.4, 6).translate(0, 0.7, 0), 0x6b4a2f),
-                withColor(new THREE.ConeGeometry(1.2 + r(), th, 7).translate(0, 1.2 + th / 2, 0), new THREE.Color().setHSL(0.28 + r() * 0.08, 0.45, 0.28 + r() * 0.12)),
-              ]);
-              trees.push(placed(tg, road, s + (k - 1) * 5, sg * (RW + 6 + r() * 5), 0.1));
-            }
-          }
+            const d = (sc === 'city' ? 12 + r() * 10 : 30 + r() * 40) + bd / 2;
+            blds.push(placed(gb, road, s + bw / 2, sg * (RW + d), groundAt(s + bw / 2, sg, d)));
+          } else addTrees(s + bw / 2, sg, sc === 'city' ? 5.5 : 5, sc === 'city' ? 11 : 45, sc === 'city' ? 3 : 4);
         }
         s += bw + 4 + r() * 8;
       }
     }
-    for (let s = Math.ceil(s0 / 45) * 45; s < s1; s += 45) {
+    const lampGap = sc === 'city' ? 45 : sc === 'highway' ? 60 : 0;
+    for (let s = lampGap ? Math.ceil(s0 / lampGap) * lampGap : s1; s < s1; s += lampGap) {
       if (nearLight(s, 14)) continue;
-      for (const sg of [-1, 1]) {
+      for (const sg of sc === 'highway' ? [1] : [-1, 1]) {
         poles.push(placed(new THREE.CylinderGeometry(0.1, 0.13, 8, 6).translate(0, 4, 0), road, s, sg * (RW + 1.2), 0));
         poles.push(placed(new THREE.BoxGeometry(2.4, 0.12, 0.12).translate(-sg * 1.1, 7.9, 0), road, s, sg * (RW + 1.2), 0));
         lamps.push(placed(new THREE.BoxGeometry(0.8, 0.18, 0.4).translate(-sg * 2.1, 7.8, 0), road, s, sg * (RW + 1.2), 0));
@@ -539,7 +758,18 @@ export class World {
     this.sun.color.set(dusk > 0.3 ? 0xffc49a : 0xffffff);
     this.m.bld.emissiveIntensity = night * 1.1;
     this.m.lamp.emissiveIntensity = night * 2;
-    this.far.material.color.set(night > 0.5 ? 0x1c2618 : 0x6f8f5a);
+    const wx = g.weather.id;
+    if (wx !== 'clear') {
+      const wc = new THREE.Color(wx === 'rain' ? 0x5d6570 : 0xd5dbe2);
+      if (night > 0.5) wc.multiplyScalar(0.35);
+      sky.lerp(wc, 0.75);
+      this.scene.background = sky; this.scene.fog.color.copy(sky);
+      this.scene.fog.near = Math.min(this.scene.fog.near, 25); this.scene.fog.far = Math.min(this.scene.fog.far, wx === 'rain' ? 260 : 200);
+      this.hemi.intensity *= 0.8; this.sun.intensity *= 0.35;
+    }
+    const farC = this.snow ? 0xe4e9ee : this.scenery === 'highway' ? 0x2c7fb8 : this.scenery === 'mountain' ? 0x3a522c : 0x6f8f5a;
+    this.far.material.color.set(farC).multiplyScalar(night > 0.5 ? 0.3 : 1);
+    this.far.position.y = this.scenery === 'mountain' ? -70 : this.scenery === 'highway' ? -5.8 : -9;
   }
 
   updateLights(g) {
@@ -556,6 +786,8 @@ export class World {
     this.syncChunks(P.s);
     this.updateLights(g);
     this.syncCars(g, dt);
+    this.syncCoins(g, dt);
+    this.syncPeds(g);
     for (const ev of view.events || []) {
       if (ev.type === 'crash') this.shake = Math.min(1.2, 0.3 + ev.impact / 60);
       if (ev.type === 'smash') this.shake = Math.min(1, 0.25 + ev.impact / 100);
@@ -614,6 +846,8 @@ export class World {
     const kmh = P.v * 3.6;
     this.camera.fov = (fp ? 66 : 62) + Math.min(24, kmh / 11);
     this.camera.updateProjectionMatrix();
+    this.updateWeather(dt, P.v);
+    this.far.position.x = _p.x; this.far.position.z = _p.z;
     this.renderer.render(this.scene, this.camera);
   }
 }

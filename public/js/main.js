@@ -1,5 +1,5 @@
-import { createGame, step, hudInfo, VEHICLES, EXAM_LEVELS, MODE_INFO } from './sim.js';
-import { laneCenter, LANES } from './road.js';
+import { createGame, step, hudInfo, VEHICLES, EXAM_LEVELS, MODE_INFO, MAPS, WEATHERS } from './sim.js';
+import { laneCenter, LANES, lightState } from './road.js';
 import { World } from './render.js';
 import { Sound } from './audio.js';
 import { Input } from './input.js';
@@ -9,7 +9,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 
 // ---------- 存档 ----------
 const DEFAULT = () => ({
-  coins: 0, owned: ['sedan'], vehicle: 'sedan', exam: {}, best: { king: 0, rampage: 0 }, runs: 0,
+  coins: 0, owned: ['sedan'], vehicle: 'sedan', exam: {}, best: { king: 0, rampage: 0 }, runs: 0, map: 'city', weather: 'clear',
   settings: { control: 'wheel', sens: 1, cam: 'fp', volume: 0.7 },
   mods: { invincible: false, speed: false, empty: false },
 });
@@ -83,7 +83,10 @@ function autopilot(g) {
 function start(mode, level = 1) {
   current = { mode, level };
   sound.unlock();
-  game = createGame({ mode, level, vehicle: profile.vehicle, mods: { ...profile.mods }, seed: (Math.random() * 1e9) | 0 });
+  if (!VEHICLES[profile.vehicle]) profile.vehicle = 'sedan';
+  game = createGame({ mode, level, vehicle: profile.vehicle, mods: { ...profile.mods }, seed: (Math.random() * 1e9) | 0, map: profile.map, weather: profile.weather });
+  $('#mapLabel').textContent = (mode === 'king' ? game.map.name : mode === 'exam' ? '驾考路线' : '大运路线') + (game.weather.id !== 'clear' ? ' · ' + game.weather.name : '');
+  $('#coinHud').hidden = mode === 'exam';
   cam = profile.settings.cam;
   state = 'play';
   show(null);
@@ -170,6 +173,8 @@ function drawHud(g) {
     html = `得分<div class="v gold">${h.score}</div>${(h.dist / 1000).toFixed(2)} km · 擦肩 ${g.stats.nearMiss}${combo}`;
   }
   setHTML('#hudLeft', html);
+  setText('#coinNum', String(h.coins));
+  drawMinimap(g);
   const blink = Math.floor(g.t * 2.6) % 2 === 0;
   $('#sigL').classList.toggle('on', h.signal === 'L' && blink);
   $('#sigR').classList.toggle('on', h.signal === 'R' && blink);
@@ -187,6 +192,8 @@ function handleEvents(g, events) {
       case 'crash': hit(); sound.crash(e.impact); if (!g.exam && e.impact > 25) toast(`追尾 -${Math.round(e.dmg)} 完好度`, 'red'); break;
       case 'smash': hit(); sound.smash(); if (g.mode !== 'rampage' && g.stats.smash === 1) big('创飞！'); break;
       case 'scrape': sound.scrape(); break;
+      case 'coin': { sound.coin(); const c = $('#coinHud'); c.classList.remove('pop'); void c.offsetWidth; c.classList.add('pop'); break; }
+      case 'ped': hit(); sound.crash(20); toast(e.text, 'red'); break;
       case 'cones': sound.scrape(); break;
       case 'yield': toast(e.text, 'info'); break;
       case 'angry': toast(e.text, 'red'); break;
@@ -214,7 +221,7 @@ async function onOver(g, R) {
   // 上榜
   if (mode !== 'exam' && !R.modded && R.score > 0) {
     try {
-      const r = await fetch('/api/leaderboard/' + mode, { method: 'POST', body: JSON.stringify({ name: profile.name, score: R.score, vehicle: g.V.name, dist: R.stats.dist }) });
+      const r = await fetch('/api/leaderboard/' + mode, { method: 'POST', body: JSON.stringify({ name: profile.name, score: R.score, vehicle: g.V.name, dist: R.stats.dist, map: mode === 'king' ? g.map.name + (g.weather.id !== 'clear' ? '·' + g.weather.name : '') : '' }) });
       const j = await r.json();
       if (j.rank) { R.rank = j.rank; if (state === 'result') $('#rReward').textContent += ` · 排行榜第 ${j.rank} 名`; }
     } catch { /* 离线 */ }
@@ -242,11 +249,80 @@ function showResult(g, R, newBest) {
     $('#rTitle').textContent = g.mode === 'rampage' ? (R.reason === '时间到' ? '时间到！' : '车毁了') : '车辆报废';
     $('#rScore').textContent = R.score.toLocaleString();
     $('#rStats').innerHTML = stat('里程', (S.dist / 1000).toFixed(2) + 'km') + stat('最高时速', Math.round(S.maxKmh)) +
-      (g.mode === 'rampage' ? stat('创飞', S.smash) : stat('擦肩', S.nearMiss)) + stat('最高连击', '×' + S.bestCombo) + stat('超车', S.overtake) + stat('闯红灯', S.redRun);
+      (g.mode === 'rampage' ? stat('创飞', S.smash) : stat('擦肩', S.nearMiss)) + stat('最高连击', '×' + S.bestCombo) + stat('捡金币', S.coins) + stat('撞行人', S.pedHit);
+    if (g.mode === 'king') $('#rTag').textContent += ` · ${g.map.name}${g.weather.id !== 'clear' ? ' · ' + g.weather.name : ''}`;
   }
   $('#rReward').textContent = `+${R.coins} 金币${newBest ? ' · 新纪录！' : ''}${R.modded ? ' · MOD 成绩不上榜' : ''}${R.rank ? ` · 排行榜第 ${R.rank} 名` : ''}`;
 }
 const stat = (k, v) => `<div><b>${v}</b>${k}</div>`;
+
+// ---------- 出发前：选路线 / 天气 ----------
+let garageFromSetup = false;
+const MAP_ICON = { city: '🏙️', highway: '🌊', mountain: '⛰️' };
+const WX_NOTE = { clear: '', rain: '雨天：路面湿滑，刹车距离变长。', snow: '下雪：路面很滑！转向跟手慢、刹车距离接近翻倍。' };
+function openSetup() {
+  state = 'menu';
+  const box = $('#mapList');
+  box.innerHTML = '';
+  for (const m of Object.values(MAPS)) {
+    const b = document.createElement('button');
+    b.className = 'map' + (profile.map === m.id ? ' sel' : '');
+    b.innerHTML = `<em>${MAP_ICON[m.id]}</em><b>${m.name}</b><small>${m.desc}</small>`;
+    b.onclick = () => { profile.map = m.id; saveProfile(); openSetup(); };
+    box.appendChild(b);
+  }
+  for (const b of $$('#setupWeather button')) b.classList.toggle('on', b.dataset.v === profile.weather);
+  $('#weatherNote').textContent = WX_NOTE[profile.weather] || '';
+  $('#setupCar').textContent = (VEHICLES[profile.vehicle] || VEHICLES.sedan).name;
+  show('setup');
+}
+
+// ---------- 小地图：以车头朝上，显示前方 ~450 米 ----------
+function drawMinimap(g) {
+  const cv = $('#minimap'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const P = g.player, road = g.road;
+  const me = road.toWorld(P.s, P.x), h = road.at(P.s).h;
+  const fx = Math.sin(h), fz = -Math.cos(h), rx = Math.cos(h), rz = Math.sin(h);
+  const k = W / 560, oy = H * 0.72;
+  const map = (wx, wz) => { const dx = wx - me.x, dz = wz - me.z; return [W / 2 + (dx * rx + dz * rz) * k, oy - (dx * fx + dz * fz) * k]; };
+  const at = (s, x) => { const q = road.toWorld(s, x); return map(q.x, q.z); };
+  ctx.clearRect(0, 0, W, H);
+  // 路
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const [w, c] of [[Math.max(10, 18 * k * 2.2), '#5d6778'], [Math.max(6, 14 * k * 1.6), '#2f3642']]) {
+    ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath();
+    for (let s = P.s - 160; s <= P.s + 460; s += 10) { const [x, y] = at(s, 0); s === P.s - 160 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
+    ctx.stroke();
+  }
+  // 路口红绿灯
+  for (const L of road.lightsNear(P.s - 60, P.s + 460)) {
+    const st = hudLight(L, g.t);
+    const [x, y] = at(L.stopS, 0);
+    ctx.fillStyle = st === 'red' ? '#ff4d4d' : st === 'yellow' ? '#ffc93c' : '#35d07f';
+    ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill();
+  }
+  // 驾考终点
+  if (g.lv && g.lv.dist < P.s + 460) { const [x, y] = at(g.lv.dist, 0); ctx.fillStyle = '#fff'; ctx.fillRect(x - 14, y - 3, 28, 6); }
+  // 金币
+  ctx.fillStyle = '#ffc93c';
+  for (const c of g.coins) if (!c.taken) { const [x, y] = at(c.s, c.x); ctx.fillRect(x - 2, y - 2, 4, 4); }
+  // 车
+  for (const c of g.cars) {
+    if (c.wreck) continue;
+    const [x, y] = at(c.s, c.x);
+    if (y < -10 || y > H + 10) continue;
+    ctx.fillStyle = c.kind === 'cones' ? '#ff7a1a' : c.aggro ? '#ff6b6b' : c.cross ? '#ffb347' : '#dfe6ee';
+    const len = c.kind === 'cones' ? c.l : c.cross ? c.w : c.l;
+    ctx.fillRect(x - 3, y - (len * k) / 2 - 1, 6, len * k + 2);
+  }
+  // 行人
+  ctx.fillStyle = '#9fd3ff';
+  for (const p of g.peds) if (!p.hit && p.kind !== 'walk') { const [x, y] = at(p.s, p.x); ctx.beginPath(); ctx.arc(x, y, 2.5, 0, 7); ctx.fill(); }
+  // 自己
+  ctx.fillStyle = '#ffc93c'; ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(W / 2, oy - 12); ctx.lineTo(W / 2 - 8, oy + 9); ctx.lineTo(W / 2 + 8, oy + 9); ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+function hudLight(L, t) { return lightState(L, t).main; }
 
 // ---------- 菜单页 ----------
 function refreshMenu() {
@@ -255,7 +331,7 @@ function refreshMenu() {
   $('#bestKing').textContent = profile.best.king ? '最佳 ' + profile.best.king : '';
   $('#bestRampage').textContent = profile.best.rampage ? '最佳 ' + profile.best.rampage : '';
   const stars = Object.values(profile.exam).reduce((a, b) => a + b, 0);
-  $('#bestExam').textContent = stars ? `★ ${stars}/18` : '';
+  $('#bestExam').textContent = stars ? `★ ${stars}/${EXAM_LEVELS.length * 3}` : '';
 }
 
 function renderLevels() {
@@ -272,7 +348,7 @@ function renderLevels() {
   });
 }
 
-const CAR_ICON = { sedan: '🚗', moto: '🏍️', sport: '🏎️', truck: '🚛' };
+const CAR_ICON = { sedan: '🚗', quadri: '🚘', stoccarda: '🏎️', sport: '🏎️', woking: '🏎️', toro: '🏎️', moto: '🏍️', ninja: '🏍️', truck: '🚛' };
 function renderGarage() {
   const box = $('#carList');
   box.innerHTML = '';
@@ -282,8 +358,8 @@ function renderGarage() {
     const el = document.createElement('div');
     el.className = 'car' + (sel ? ' sel' : '');
     const bar = (k, val) => `<div class="stat">${k}<i style="--w:${Math.round(val * 100)}%"></i></div>`;
-    el.innerHTML = `<div class="ico">${CAR_ICON[v.id]}</div><b>${v.name}</b><small>${v.desc}</small>` +
-      bar('极速', v.maxV * 3.6 / 290) + bar('加速', v.accel / 8) + bar('操控', v.steer / 1.4) + bar('耐撞', Math.min(1, v.hp * v.armor / 400 + 0.15)) +
+    el.innerHTML = `<div class="ico">${CAR_ICON[v.id] || '🚗'}</div><b>${v.name}</b><span class="ref">${v.ref}</span><small>${v.desc} · 极速 ${Math.round(v.maxV * 3.6)}</small>` +
+      bar('极速', v.maxV * 3.6 / 355) + bar('加速', v.accel / 10.3) + bar('操控', v.steer / 1.45) + bar('耐撞', Math.min(1, v.hp * v.armor / 400 + 0.15)) +
       `<button class="act ${owned ? '' : profile.coins >= v.price ? 'buy' : 'cant'}">${sel ? '使用中' : owned ? '选用' : `🪙 ${v.price} 购买`}</button>`;
     el.querySelector('.act').onclick = () => {
       if (owned) profile.vehicle = v.id;
@@ -301,7 +377,7 @@ async function renderBoard(mode) {
   box.innerHTML = '<li class="empty">加载中…</li>';
   try {
     const list = await (await fetch('/api/leaderboard/' + mode)).json();
-    box.innerHTML = list.length ? list.map((e) => `<li class="${e.name === profile.name ? 'me' : ''}"><span>${esc(e.name)}<small>${esc(e.vehicle || '')} · ${(e.dist / 1000).toFixed(1)} km · ${e.at.slice(5, 10)}</small></span><b>${e.score.toLocaleString()}</b></li>`).join('')
+    box.innerHTML = list.length ? list.map((e) => `<li class="${e.name === profile.name ? 'me' : ''}"><span>${esc(e.name)}<small>${esc(e.vehicle || '')}${e.map ? ' · ' + esc(e.map) : ''} · ${(e.dist / 1000).toFixed(1)} km · ${e.at.slice(5, 10)}</small></span><b>${e.score.toLocaleString()}</b></li>`).join('')
       : '<li class="empty">还没有记录，去跑一把！</li>';
   } catch { box.innerHTML = '<li class="empty">排行榜要开着本地服务（npm start）</li>'; }
 }
@@ -329,7 +405,7 @@ function bindUI() {
   for (const c of $$('.mode-card')) c.onclick = () => {
     sound.unlock(); sound.click();
     const m = c.dataset.mode;
-    if (m === 'exam') { renderLevels(); show('exam'); } else start(m);
+    if (m === 'exam') { renderLevels(); show('exam'); } else if (m === 'king') openSetup(); else start(m);
   };
   for (const b of $$('.menu-nav button')) b.onclick = () => {
     sound.unlock(); sound.click();
@@ -339,7 +415,11 @@ function bindUI() {
     if (id === 'settings') renderSettings();
     show(id);
   };
-  for (const b of $$('.sheet .back')) b.onclick = () => { sound.click(); toMenu(); };
+  for (const b of $$('.sheet .back')) b.onclick = () => { sound.click(); if (garageFromSetup && b.closest('#garage')) { garageFromSetup = false; openSetup(); } else toMenu(); };
+  $('#setupGo').onclick = () => start('king');
+  $('#setupBack').onclick = toMenu;
+  $('#setupGarage').onclick = () => { garageFromSetup = true; renderGarage(); show('garage'); };
+  for (const b of $$('#setupWeather button')) b.onclick = () => { profile.weather = b.dataset.v; saveProfile(); openSetup(); };
   $('#briefBack').onclick = () => { renderLevels(); state = 'menu'; show('exam'); };
   $('#briefGo').onclick = () => start('exam', current.level);
   $('#nameChip').onclick = () => { renderSettings(); show('settings'); setTimeout(() => $('#setName').focus(), 50); };

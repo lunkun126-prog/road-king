@@ -46,6 +46,10 @@ try:
 
         # 公路之王
         page.click('.mode-card[data-mode=king]')
+        check(page.is_visible('#setup'), '公路之王先选路线/天气')
+        check(page.locator('#mapList .map').count() == 3, '三条路线')
+        page.screenshot(path=OUT / '01b_setup.png')
+        page.click('#setupGo')
         page.wait_for_function('window.__rk.state === "play"')
         hold(page, 'KeyW', 4)
         v = page.evaluate('window.__rk.game.player.v * 3.6')
@@ -60,6 +64,7 @@ try:
         page.keyboard.press('KeyC')
         hold(page, 'KeyW', 2)
         page.screenshot(path=OUT / '03_king_tp.png')
+        check(page.is_visible('#minimap'), '右上角小地图')
         speed_txt = page.inner_text('#speed')
         check(int(speed_txt) > 0, f'HUD 车速显示 {speed_txt}')
         page.keyboard.press('Escape')
@@ -71,7 +76,7 @@ try:
 
         # 驾考
         page.click('.mode-card[data-mode=exam]')
-        check(page.locator('.level.locked').count() == 5, '驾考只解锁第 1 关')
+        check(page.locator('.level.locked').count() == 7, '驾考 8 关只解锁第 1 关')
         page.click('.level >> nth=0')
         check(page.is_visible('#brief'), '关卡说明')
         page.click('#briefGo')
@@ -85,6 +90,15 @@ try:
         check('合格' in page.inner_text('#rTitle'), '驾考到终点结算：' + page.inner_text('#rTitle'))
         page.screenshot(path=OUT / '05_exam_result.png')
         check(page.is_visible('#rNext'), '出现「下一关」')
+
+        # 雪天滨海高速 + 雨天盘山
+        for mp, wx, shot in [('highway', 'snow', '06a_highway_snow'), ('mountain', 'rain', '06b_mountain_rain')]:
+            page.evaluate(f'() => {{ const p = window.__rk.profile(); p.map = "{mp}"; p.weather = "{wx}"; window.__rk.start("king"); }}')
+            hold(page, 'KeyW', 3)
+            g = page.evaluate('({map: window.__rk.game.map.id, wx: window.__rk.game.weather.id, v: window.__rk.game.player.v})')
+            check(g['map'] == mp and g['wx'] == wx and g['v'] > 5, f'{mp}/{wx} 能开 {g}')
+            page.screenshot(path=OUT / f'{shot}.png')
+        check(not errors, f'换地图天气无报错 {errors[:3]}')
 
         # 大运狂飙
         page.evaluate('window.__rk.start("rampage")')
@@ -122,6 +136,10 @@ try:
         m.screenshot(path=OUT / '09_mobile_menu.png')
         check(m.evaluate('document.documentElement.scrollWidth <= innerWidth'), '手机主菜单无横向溢出')
         m.tap('.mode-card[data-mode=king]')
+        m.wait_for_timeout(300)
+        check(m.evaluate('document.querySelector("#setup .card").scrollHeight <= innerHeight'), '手机选路线页放得下')
+        m.screenshot(path=OUT / '09b_mobile_setup.png')
+        m.tap('#setupGo')
         m.wait_for_function('window.__rk.state === "play"')
         # 同时按住油门和转动方向盘(两个 pointer)
         m.evaluate('''() => {

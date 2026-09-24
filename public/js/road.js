@@ -40,6 +40,7 @@ export class Road {
     this.curves = opts.curves ?? true;
     this.hills = opts.hills ?? true;
     this.curveMax = opts.curveMax ?? 1 / 140;
+    this.hillAmp = opts.hillAmp ?? 1;
     this.lightCfg = opts.lights === undefined ? { first: 450, every: [600, 1100] } : opts.lights;
     this.segs = [{ s0: -1e9, s1: 300, k: 0 }];
     this.lights = [];
@@ -109,7 +110,7 @@ export class Road {
   yAt(s) {
     if (!this.hills || s < 0) return 0;
     const amp = smooth((s - 150) / 200) * smooth((this.lightDist(s) - 70) / 120);
-    return amp * (2.8 * Math.sin(s / 137 + this.ph1) + 3.4 * Math.sin(s / 331 + this.ph2));
+    return this.hillAmp * amp * (2.8 * Math.sin(s / 137 + this.ph1) + 3.4 * Math.sin(s / 331 + this.ph2));
   }
 
   // 返回道路中心点 {x,y,z,h}

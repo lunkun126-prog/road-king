@@ -3,11 +3,30 @@ import { Road, LANES, LANE_W, ROAD_HALF, laneCenter, laneOf, rng, lightState } f
 
 const KMH = 3.6;
 
+// 致敬款：外形参考真车，名字虚构（公开仓库不用品牌名）。model 为 public/models 下的 glb，没有就用代码画的车
 export const VEHICLES = {
-  sedan: { id: 'sedan', name: '小轿车', price: 0, maxV: 190 / KMH, accel: 4.6, brake: 10, mass: 1, w: 1.85, l: 4.4, hp: 100, steer: 1, armor: 1, desc: '均衡，新手友好' },
-  moto: { id: 'moto', name: '摩托', price: 800, maxV: 215 / KMH, accel: 6.8, brake: 10, mass: 0.35, w: 0.8, l: 2.1, hp: 60, steer: 1.4, armor: 0.6, desc: '车身窄，能钻车缝；很脆' },
-  sport: { id: 'sport', name: '跑车', price: 2000, maxV: 285 / KMH, accel: 8, brake: 12, mass: 1, w: 1.95, l: 4.5, hp: 90, steer: 1.15, armor: 0.9, desc: '极速 285，擦肩分更高' },
-  truck: { id: 'truck', name: '大运重卡', price: 1500, maxV: 150 / KMH, accel: 2.9, brake: 6.5, mass: 6, w: 2.5, l: 9.5, hp: 320, steer: 0.8, armor: 4, smash: true, desc: '撞谁谁飞；刹车很长' },
+  sedan: { id: 'sedan', name: '家用轿车', ref: '日系家轿', price: 0, maxV: 220 / KMH, accel: 5, brake: 10, mass: 1, w: 1.85, l: 4.5, hp: 100, steer: 1, armor: 1, desc: '均衡，新手友好' },
+  quadri: { id: 'quadri', name: '四叶草 GTA', ref: '阿尔法·罗密欧 Giulia GTA 风格', price: 1200, maxV: 305 / KMH, accel: 7.2, brake: 11, mass: 1, w: 1.9, l: 4.6, hp: 95, steer: 1.12, armor: 0.95, desc: '意式四门猛兽，好开又够快' },
+  stoccarda: { id: 'stoccarda', name: '斯图加特 GT', ref: '保时捷 911 GT3 风格', price: 2200, maxV: 318 / KMH, accel: 8, brake: 12.5, mass: 1, w: 1.85, l: 4.55, hp: 95, steer: 1.22, armor: 0.95, desc: '刹车最强，过弯最稳' },
+  sport: { id: 'sport', name: '跃马 F8', ref: '法拉利 F8 风格', price: 3000, maxV: 340 / KMH, accel: 8.8, brake: 12, mass: 1, w: 1.98, l: 4.6, hp: 90, steer: 1.15, armor: 0.9, desc: '中置 V8，擦肩分更高' },
+  woking: { id: 'woking', name: '沃金 720', ref: '迈凯伦 720S 风格', price: 3800, maxV: 341 / KMH, accel: 9.2, brake: 12.5, mass: 1, w: 1.93, l: 4.55, hp: 88, steer: 1.18, armor: 0.88, desc: '碳纤维轻量化，加速最猛之一' },
+  toro: { id: 'toro', name: '公牛 V12', ref: '兰博基尼 Aventador 风格', price: 5000, maxV: 355 / KMH, accel: 9, brake: 11.5, mass: 1.1, w: 2.05, l: 4.8, hp: 100, steer: 1.05, armor: 1, desc: '极速 355，全场最快' },
+  moto: { id: 'moto', name: '蓝焰 R1', ref: '雅马哈 YZF-R1 风格仿赛', price: 1500, maxV: 299 / KMH, accel: 10, brake: 11, mass: 0.35, w: 0.8, l: 2.1, hp: 60, steer: 1.45, armor: 0.6, rider: true, desc: '千元级仿赛，能钻车缝；很脆' },
+  ninja: { id: 'ninja', name: '绿忍 ZX', ref: '川崎 Ninja ZX-10R 风格仿赛', price: 1800, maxV: 299 / KMH, accel: 10.3, brake: 11, mass: 0.35, w: 0.8, l: 2.1, hp: 65, steer: 1.4, armor: 0.62, rider: true, desc: '川崎绿，出弯更猛' },
+  truck: { id: 'truck', name: '大运重卡', ref: '重型牵引车', price: 1500, maxV: 170 / KMH, accel: 3.2, brake: 6.5, mass: 6, w: 2.5, l: 9.5, hp: 320, steer: 0.8, armor: 4, smash: true, desc: '撞谁谁飞；刹车很长' },
+};
+
+// 地图：公路之王可选。车少的路给你放开跑
+export const MAPS = {
+  city: { id: 'city', name: '城市主干道', desc: '车多、红绿灯、施工、行人', traffic: 1, curveMax: 1 / 140, hillAmp: 1, lights: { first: 450, every: [650, 1100] }, ai: [55, 90], cones: true, peds: true, coinGap: [160, 360] },
+  highway: { id: 'highway', name: '滨海高速', desc: '车少、没有红绿灯，长直道大弯放开跑', traffic: 0.3, curveMax: 1 / 700, hillAmp: 0.6, lights: null, ai: [95, 135], cones: false, peds: false, coinGap: [90, 220] },
+  mountain: { id: 'mountain', name: '盘山公路', desc: '几乎没车，急弯连坡，最刺激', traffic: 0.16, curveMax: 1 / 115, hillAmp: 2.4, lights: null, ai: [60, 90], cones: false, peds: false, coinGap: [110, 260] },
+};
+
+export const WEATHERS = {
+  clear: { id: 'clear', name: '晴天', grip: 1 },
+  rain: { id: 'rain', name: '雨天', grip: 0.78 },
+  snow: { id: 'snow', name: '下雪', grip: 0.45 },
 };
 
 export const CAR_TYPES = {
@@ -26,26 +45,31 @@ export const EXAM_LEVELS = [
   { id: 4, name: '夜间驾驶', dist: 2000, limit: 70, traffic: 0.7, aggro: 0.12, curves: true, curveMax: 1 / 220, night: true, requireLights: true, lights: { first: 500, every: [600, 800] }, tip: '天黑了，记得开大灯（L）。' },
   { id: 5, name: '大雾天气', dist: 2000, limit: 50, traffic: 0.6, aggro: 0.1, curves: true, curveMax: 1 / 240, fog: true, lights: { first: 450, every: [550, 750] }, tip: '能见度很低，限速 50，看清红绿灯倒计时。' },
   { id: 6, name: '限时通勤', dist: 3000, limit: 80, time: 190, traffic: 1.25, aggro: 0.3, curves: true, curveMax: 1 / 180, cones: true, lights: { first: 450, every: [600, 850] }, tip: '190 秒内到公司！路上有路怒族，按喇叭（H）能吓退加塞。' },
+  { id: 7, name: '雨夜行车', dist: 2200, limit: 60, traffic: 0.7, aggro: 0.12, curves: true, curveMax: 1 / 220, night: true, requireLights: true, weather: 'rain', lights: { first: 500, every: [600, 800] }, tip: '下雨路滑，刹车距离变长。开大灯，早点减速。' },
+  { id: 8, name: '冰雪路面', dist: 2200, limit: 50, traffic: 0.55, aggro: 0.05, curves: true, curveMax: 1 / 240, weather: 'snow', lights: { first: 500, every: [600, 800] }, tip: '雪地非常滑！转向和刹车都要提前，别猛打方向。' },
 ];
 
 export const MODE_INFO = {
-  exam: { name: '驾考模式', desc: '6 关驾照考试，100 分起扣，90 分及格' },
+  exam: { name: '驾考模式', desc: '8 关驾照考试，100 分起扣，90 分及格' },
   king: { name: '公路之王', desc: '无尽车流，弯道坡道红绿灯；擦肩连击冲榜' },
   rampage: { name: '大运狂飙', desc: '75 秒开重卡横冲直撞，创飞越多分越高' },
 };
 
 const PALETTE = [0xd94c4c, 0x3d6fd9, 0xe8e8e8, 0x2b2b2b, 0xf0c33c, 0x3fa66b, 0x8a5cc7, 0xe07a2f, 0x9aa5b1, 0x5ac8d8];
 
-export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods = {}, seed = Date.now() & 0xffffff } = {}) {
+export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods = {}, seed = Date.now() & 0xffffff, map = 'city', weather = 'clear' } = {}) {
   const lv = mode === 'exam' ? EXAM_LEVELS[level - 1] : null;
-  const vid = mode === 'rampage' ? 'truck' : vehicle;
+  const vid = mode === 'rampage' ? 'truck' : VEHICLES[vehicle] ? vehicle : 'sedan';
   const V = VEHICLES[vid];
+  const M = MAPS[mode === 'king' ? map : 'city'] || MAPS.city;
+  const W = WEATHERS[lv ? lv.weather || 'clear' : weather] || WEATHERS.clear;
   let roadOpts;
   if (lv) roadOpts = { curves: lv.curves, hills: lv.hills ?? true, curveMax: lv.curveMax, lights: lv.lights };
   else if (mode === 'rampage') roadOpts = { curves: true, curveMax: 1 / 200, lights: null };
-  else roadOpts = { curves: true, lights: { first: 450, every: [650, 1100] } };
+  else roadOpts = { curves: true, curveMax: M.curveMax, hillAmp: M.hillAmp, lights: M.lights };
   const g = {
-    mode, level, lv, V, mods, seed,
+    mode, level, lv, V, mods, seed, map: M, weather: W, grip: W.grip,
+    coins: [], coinAt: 120, coinCount: 0, peds: [], pedTimers: {}, jayAt: 700,
     road: new Road(seed, roadOpts),
     rand: rng(seed ^ 0x5bd1e995),
     t: 0, over: false, result: null,
@@ -54,12 +78,13 @@ export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods =
     cars: [], nextId: 1, crossTimers: {}, conesAt: 0,
     events: [],
     score: 0, combo: 0, comboT: 0, best: { combo: 0 },
-    stats: { nearMiss: 0, overtake: 0, smash: 0, crash: 0, redRun: 0, maxKmh: 0, dist: 0 },
+    stats: { nearMiss: 0, overtake: 0, smash: 0, crash: 0, redRun: 0, maxKmh: 0, dist: 0, coins: 0, pedHit: 0 },
     exam: lv ? { points: 100, flags: {}, log: [], failed: null } : null,
     timeLeft: mode === 'rampage' ? 75 : lv?.time ?? 0,
   };
   if (mode !== 'rampage') g.player.v = 0; else g.player.v = 60 / KMH;
   fillTraffic(g);
+  for (let i = 0; i < 14; i++) spawnWalker(g, g.player.s - 60 + g.rand() * 480);
   return g;
 }
 
@@ -72,7 +97,7 @@ function trafficLevel(g) {
   if (g.mods.empty) return 0;
   if (g.lv) return g.lv.traffic;
   if (g.mode === 'rampage') return 1.9;
-  return Math.min(1.7, 0.7 + g.player.s / 9000);
+  return g.map.traffic * Math.min(1.7, 0.7 + g.player.s / 9000);
 }
 function aggroRatio(g) {
   if (g.lv) return g.lv.aggro;
@@ -80,10 +105,12 @@ function aggroRatio(g) {
   return Math.min(0.35, 0.08 + g.player.s / 25000);
 }
 function aiSpeedKmh(g) {
+  const wx = g.grip < 0.6 ? 0.8 : g.grip < 0.9 ? 0.92 : 1;
   if (g.lv) return [g.lv.limit * 0.7, g.lv.limit * 0.95];
   if (g.mode === 'rampage') return [50, 80];
   const up = Math.min(40, g.player.s / 250);
-  return [55 + up, 90 + up];
+  const [lo, hi] = g.map.ai;
+  return [(lo + up) * wx, (hi + up) * wx];
 }
 
 function makeCar(g, s, lane, kind) {
@@ -149,7 +176,7 @@ function spawnTraffic(g, dt) {
     }
   }
   // 施工占道
-  const wantCones = g.lv ? g.lv.cones : g.mode === 'king';
+  const wantCones = g.lv ? g.lv.cones : g.mode === 'king' && g.map.cones;
   if (wantCones && P.s + 420 > g.conesAt) {
     const s = Math.max(P.s + 380, g.conesAt);
     const light = g.road.nextLightAfter(s - 80);
@@ -191,6 +218,7 @@ function leaderOf(g, c, laneX) {
   };
   for (const o of g.cars) check(o);
   check(P);
+  for (const p of g.peds) if (!p.hit && p.kind !== 'walk' && Math.abs(p.x) < ROAD_HALF + 1.5) check(p);
   // 停止线
   const L = g.road.nextLightAfter(c.s + c.l / 2 - 0.5);
   if (L) {
@@ -289,13 +317,13 @@ function updateCar(g, c, dt) {
   // IDM 跟车
   const vDes = c.stalled ? 0 : c.brakeT > 0 ? Math.max(0, g.player.v * 0.55) : c.vDes;
   c.brakeT -= dt;
-  const a0 = 2.2, b = 3.2, s0 = 2.4;
+  const a0 = 2.2, b = 3.2 * g.grip, s0 = 2.4;
   let acc = vDes > 0.1 ? a0 * (1 - Math.pow(c.v / vDes, 4)) : -4;
   if (lead.gap < Infinity) {
-    const sStar = s0 + Math.max(0, c.v * c.headway + (c.v * (c.v - lead.lv)) / (2 * Math.sqrt(a0 * b)));
+    const sStar = s0 + Math.max(0, (c.v * c.headway) / Math.sqrt(g.grip) + (c.v * (c.v - lead.lv)) / (2 * Math.sqrt(a0 * b)));
     acc -= a0 * Math.pow(sStar / Math.max(lead.gap, 0.1), 2);
   }
-  acc = Math.max(-9, Math.min(a0, acc));
+  acc = Math.max(-9 * (0.35 + 0.65 * g.grip), Math.min(a0, acc));
   c.braking = acc < -1.2;
   c.v = Math.max(0, c.v + acc * dt);
   c.s += c.v * dt;
@@ -361,6 +389,8 @@ function finish(g, ok, reason) {
     coins = Math.floor(g.score / 40);
     g.result = { ok, reason, score: Math.round(g.score), coins };
   }
+  g.result.coins += g.coinCount * 5;
+  g.result.coinPickup = g.coinCount;
   if (g.mods && Object.values(g.mods).some(Boolean)) g.result.modded = true;
   g.result.stats = { ...g.stats, dist: Math.round(g.player.s), bestCombo: g.best.combo, time: Math.round(g.t) };
   emit(g, 'over', { result: g.result });
@@ -446,14 +476,17 @@ function updatePlayer(g, inp, dt) {
   // 转向
   P.steer += (Math.max(-1, Math.min(1, inp.steer || 0)) - P.steer) * Math.min(1, dt * (inp.analog ? 14 : 7));
   const k = g.road.kAt(P.s);
-  const latMax = Math.min(P.v * 0.42, 5.6) * V.steer * sens;
-  const want = P.steer * latMax - k * P.v * P.v * 0.3;
-  P.xv += (want - P.xv) * Math.min(1, dt * 7);
+  const grip = g.grip;
+  const latMax = Math.min(P.v * 0.42, 5.6 + P.v * 0.03) * V.steer * sens * (0.7 + 0.3 * grip);
+  const want = P.steer * latMax - (k * P.v * P.v * 0.3) / (0.6 + 0.4 * grip);
+  // 抓地力越低，横向速度跟得越慢 = 打滑
+  P.xv += (want - P.xv) * Math.min(1, dt * 7 * grip * grip);
+  P.slip = want - P.xv;
   P.x += P.xv * dt;
   // 油门/刹车
   const thr = inp.cruise && !inp.brake ? Math.max(inp.throttle || 0, P.v < inp.cruise ? 0.6 : 0) : inp.throttle || 0;
-  let acc = thr * V.accel * (M.speed ? 2.2 : 1) * Math.max(0, 1 - Math.pow(P.v / maxV, 2));
-  acc -= (inp.brake || 0) * V.brake;
+  let acc = thr * V.accel * (M.speed ? 2.2 : 1) * (0.5 + 0.5 * g.grip) * Math.max(0, 1 - Math.pow(P.v / maxV, 2));
+  acc -= (inp.brake || 0) * V.brake * (0.35 + 0.65 * g.grip);
   acc -= 0.25 + 0.0011 * P.v * P.v / speedMul;
   P.v = Math.max(0, P.v + acc * dt);
   const ds = P.v * dt;
@@ -577,6 +610,9 @@ export function step(g, inp, dt) {
     if (g.over) return;
   }
   nearMisses(g);
+  updateCoins(g);
+  updatePeds(g, dt);
+  if (g.over) return;
   g.stats.dist = P.s;
   if (g.exam && !g.over) examRules(g, dt);
 }
@@ -593,5 +629,113 @@ export function hudInfo(g) {
     kmh: Math.round(P.v * KMH), hp: P.hp / g.V.hp, score: Math.round(g.score), combo: g.combo, comboT: g.comboT,
     dist: Math.round(P.s), light, signal: P.signal, lightsOn: P.lightsOn, timeLeft: g.timeLeft,
     exam: g.exam ? { points: g.exam.points, limit: g.lv.limit, dist: g.lv.dist } : null,
+    coins: g.coinCount, grip: g.grip,
   };
+}
+
+// ---------- 金币 ----------
+function coinSpotOk(g, s, x) {
+  for (const c of g.cars) if (c.kind === 'cones' && Math.abs(c.s - s) < c.l / 2 + 4 && Math.abs(c.x - x) < 2.5) return false;
+  const L = g.road.nextLightAfter(s - 30);
+  return !L || Math.abs(L.s - s) > 30;
+}
+
+function updateCoins(g) {
+  const P = g.player;
+  if (g.exam) return;
+  g.coins = g.coins.filter((c) => (c.taken ? g.t - c.takenT < 0.5 : c.s > P.s - 30));
+  while (g.coinAt < P.s + 430) {
+    const s0 = Math.max(g.coinAt, P.s + 260);
+    const n = 5 + Math.floor(g.rand() * 4);
+    let lane = Math.floor(g.rand() * LANES);
+    const shift = g.rand() < 0.4 ? (lane === 0 ? 1 : lane === LANES - 1 ? -1 : g.rand() < 0.5 ? -1 : 1) : 0;
+    for (let i = 0; i < n; i++) {
+      // 蛇形：走到一半换一条道，引导你变道
+      const t = shift ? Math.min(1, Math.max(0, (i - n / 2 + 1.5) / 3)) : 0;
+      const x = laneCenter(lane) + shift * LANE_W * t;
+      const s = s0 + i * 7;
+      if (coinSpotOk(g, s, x)) g.coins.push({ id: g.nextId++, s, x, taken: false, takenT: 0 });
+    }
+    const [a, b] = g.mode === 'rampage' ? [140, 300] : g.map.coinGap;
+    g.coinAt = s0 + n * 7 + a + g.rand() * (b - a);
+  }
+  for (const c of g.coins) {
+    if (c.taken) continue;
+    if (Math.abs(c.s - P.s) < P.l / 2 + 0.8 && Math.abs(c.x - P.x) < P.w / 2 + 0.9) {
+      c.taken = true; c.takenT = g.t;
+      g.coinCount++; g.stats.coins++;
+      if (!g.exam) g.score += 50;
+      emit(g, 'coin', { id: c.id, n: g.coinCount });
+    }
+  }
+}
+
+// ---------- 行人 ----------
+const PED_COLORS = [0x2f5d9c, 0xc0392b, 0x27ae60, 0xf1c40f, 0x8e44ad, 0x34495e, 0xe67e22, 0xecf0f1, 0x16a085];
+
+function makePed(g, kind, s, x, vs, vx) {
+  const r = g.rand;
+  return { id: g.nextId++, kind, s, x, vs, vx, w: 0.55, l: 0.55, v: 0, hit: null, phase: r() * 6,
+    shirt: PED_COLORS[Math.floor(r() * PED_COLORS.length)], pants: r() < 0.5 ? 0x2c3e50 : 0x5d4037, h: 1.6 + r() * 0.25 };
+}
+
+function spawnWalker(g, s) {
+  if (!g.map.peds || g.mode === 'rampage') return;
+  const side = g.rand() < 0.5 ? -1 : 1;
+  const dir = g.rand() < 0.5 ? -1 : 1;
+  g.peds.push(makePed(g, 'walk', s, side * (ROAD_HALF + 1.6 + g.rand() * 2.4), dir * (1.1 + g.rand() * 0.5), 0));
+}
+
+function updatePeds(g, dt) {
+  const P = g.player;
+  if (!g.map.peds || g.mode === 'rampage') return;
+  g.peds = g.peds.filter((p) => p.s > P.s - 120 && p.s < P.s + 520 && Math.abs(p.x) < 14 && (!p.hit || p.hit.t < 15));
+  if (g.peds.filter((p) => p.kind === 'walk').length < 16) spawnWalker(g, P.s + 300 + g.rand() * 180);
+  // 红灯时走斑马线过马路
+  for (const L of g.road.lightsNear(P.s - 40, P.s + 380)) {
+    const st = lightState(L, g.t);
+    g.pedTimers[L.id] = (g.pedTimers[L.id] ?? 0) - dt;
+    if (st.main === 'red' && st.remain > 7.5 && g.pedTimers[L.id] <= 0) {
+      g.pedTimers[L.id] = 0.7 + g.rand() * 1.2;
+      const dir = g.rand() < 0.5 ? 1 : -1;
+      g.peds.push(makePed(g, 'cross', L.stopS + 2 + g.rand() * 2, -dir * 10, 0, dir * (2 + g.rand() * 0.5)));
+    }
+  }
+  // 公路之王城市图：偶尔有人横穿马路
+  if (g.mode === 'king' && !g.mods.empty && P.s + 150 > g.jayAt) {
+    const dir = g.rand() < 0.5 ? 1 : -1;
+    g.peds.push(makePed(g, 'jay', g.jayAt, -dir * 9.5, 0, dir * (1.7 + g.rand() * 0.6)));
+    g.jayAt += 900 + g.rand() * 900;
+  }
+  for (const p of g.peds) {
+    if (p.hit) {
+      const h = p.hit;
+      h.t += dt; h.y += h.vy * dt; h.vy -= 16 * dt;
+      if (h.y < 0) { h.y = 0; h.vy = Math.abs(h.vy) * 0.25; p.vs *= 0.5; p.vx *= 0.5; }
+      if (h.y === 0 && Math.abs(h.vy) < 0.5) { p.vs *= Math.pow(0.02, dt); p.vx *= Math.pow(0.02, dt); }
+      p.s += p.vs * dt; p.x += p.vx * dt;
+      h.rx += h.sx * dt * (h.y > 0 ? 1 : 0.1); h.rz += h.sz * dt * (h.y > 0 ? 1 : 0.1);
+      continue;
+    }
+    p.phase += dt * 6;
+    if (p.kind === 'walk') p.s += p.vs * dt;
+    else {
+      p.x += p.vx * dt;
+      if (Math.abs(p.x) > 10.5) { p.kind = 'walk'; p.vx = 0; p.vs = (g.rand() < 0.5 ? -1 : 1) * 1.2; p.x = Math.sign(p.x) * (ROAD_HALF + 2); }
+    }
+    if (Math.abs(p.s - P.s) < P.l / 2 + p.l / 2 && Math.abs(p.x - P.x) < P.w / 2 + p.w / 2 && P.v > 0.5) hitPed(g, p);
+  }
+}
+
+function hitPed(g, p) {
+  const P = g.player;
+  const side = Math.sign(p.x - P.x) || 1;
+  p.hit = { t: 0, y: 0.2, vy: 2.5 + P.v * 0.12, rx: 0, rz: 0, sx: -6 - P.v * 0.2, sz: side * (2 + g.rand() * 3) };
+  p.vs = P.v * 0.85; p.vx = side * (1 + P.v * 0.05);
+  P.v *= 0.88;
+  g.stats.pedHit++;
+  g.combo = 0; g.comboT = 0;
+  emit(g, 'ped', { id: p.id, text: g.exam ? '撞到行人' : '撞到行人！-800' });
+  if (g.exam) { penalize(g, 'ped' + p.id, 100, '撞到行人'); fail(g, '撞到行人'); return; }
+  g.score = Math.max(0, g.score - 800);
 }

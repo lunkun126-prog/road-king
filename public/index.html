@@ -31,6 +31,10 @@
       <button id="btnPause" class="icon-btn" aria-label="暂停">❚❚</button>
     </div>
   </div>
+  <div class="mapbox"><canvas id="minimap" width="280" height="280"></canvas><span id="mapLabel"></span></div>
+  <div id="coinHud" class="pill coin-hud">🪙 <b id="coinNum">0</b></div>
+
+
   <div id="toasts"></div>
   <div id="bigText"></div>
   <div id="keyhint">W/S 油门刹车 · A/D 转向 · Q/E 转向灯 · H 喇叭 · L 大灯 · C 切视角 · Esc 暂停</div>
@@ -77,8 +81,8 @@
     <h1 class="logo">公路之王<span>Plus</span></h1>
     <p class="slogan">道路千万条，安全第一条</p>
     <div class="modes">
-      <button class="mode-card" data-mode="exam"><em>🪪</em><b>驾考模式</b><small>6 关驾照考试 · 100 分起扣</small><span id="bestExam" class="best"></span></button>
-      <button class="mode-card hot" data-mode="king"><em>🛣️</em><b>公路之王</b><small>无尽车流 · 擦肩连击冲榜</small><span id="bestKing" class="best"></span></button>
+      <button class="mode-card" data-mode="exam"><em>🪪</em><b>驾考模式</b><small>8 关驾照考试 · 雨夜冰雪都有</small><span id="bestExam" class="best"></span></button>
+      <button class="mode-card hot" data-mode="king"><em>🛣️</em><b>公路之王</b><small>城市 / 高速 / 山路 · 捡金币冲榜</small><span id="bestKing" class="best"></span></button>
       <button class="mode-card" data-mode="rampage"><em>🚛</em><b>大运狂飙</b><small>开重卡 75 秒 · 创飞一切</small><span id="bestRampage" class="best"></span></button>
     </div>
     <nav class="menu-nav">
@@ -87,6 +91,19 @@
       <button data-go="settings">⚙️<span>设置</span></button>
       <button data-go="help">❓<span>玩法</span></button>
     </nav>
+  </div>
+</section>
+
+<section id="setup" class="screen dim" hidden>
+  <div class="card setup">
+    <small>公路之王 · 出发前</small>
+    <h2>选路线</h2>
+    <div id="mapList" class="maps"></div>
+    <div class="seg wx" id="setupWeather"><button data-v="clear">☀️ 晴天</button><button data-v="rain">🌧️ 雨天</button><button data-v="snow">❄️ 下雪</button></div>
+    <p class="note" id="weatherNote"></p>
+    <div class="car-line"><span>座驾</span><b id="setupCar"></b><button id="setupGarage" class="btn ghost">换车</button></div>
+    <button id="setupGo" class="btn primary">出发</button>
+    <button id="setupBack" class="btn ghost">返回</button>
   </div>
 </section>
 
@@ -101,7 +118,7 @@
   <div class="sheet">
     <header><button class="back">‹</button><h2>车库</h2><div class="chip coins">🪙 <span class="coinText">0</span></div></header>
     <div id="carList" class="cars"></div>
-    <p class="note">金币靠开车赚，没有广告。「大运狂飙」固定开大运重卡。</p>
+    <p class="note">金币靠开车赚、路上捡，没有广告。车型都是「致敬款」：外形参考真车，名字是虚构的。「大运狂飙」固定开大运重卡。</p>
   </div>
 </section>
 
@@ -132,8 +149,9 @@
   <div class="sheet prose">
     <header><button class="back">‹</button><h2>玩法</h2></header>
     <h3>三种模式</h3>
-    <p><b>驾考模式</b>：100 分起扣，90 分及格。闯红灯、撞车直接挂科；超速、不打灯变道、蹭护栏、撞锥桶各扣分。满分三星。</p>
-    <p><b>公路之王</b>：越快分越高（60 km/h 以上加倍）。贴着车超过去叫「擦肩」，4 秒内连续擦肩叠连击，最高 ×10。路口红灯时横向有车流，敢闯就要会躲。</p>
+    <p><b>驾考模式</b>：8 关，100 分起扣，90 分及格。闯红灯、撞车、撞到行人直接挂科；超速、不打灯变道、蹭护栏、撞锥桶各扣分。满分三星。</p>
+    <p><b>公路之王</b>：三条路线——<b>城市主干道</b>（车多、红绿灯、行人）、<b>滨海高速</b>（车少没红绿灯，放开跑）、<b>盘山公路</b>（几乎没车，急弯连坡）。越快分越高；贴着车超过去叫「擦肩」，4 秒内连续擦肩叠连击，最高 ×10。路上的金币一枚 5 金币。撞到行人扣 800 分。</p>
+    <p><b>天气</b>：雨天刹车变长、稍滑；<b>下雪路面很滑</b>，转向跟手慢、刹车距离接近翻倍，要提前减速。</p>
     <p><b>大运狂飙</b>：75 秒开大运，每创飞一辆 +1.5 秒，3 秒内连撞叠连击。</p>
     <h3>读懂别人的车</h3>
     <p>所有 NPC <b>变道前都会先打转向灯</b>——看到车尾橙灯闪就是要过来了。带「路怒」性格的会专门加塞到你前面再点刹车。</p>

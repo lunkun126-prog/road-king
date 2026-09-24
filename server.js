@@ -77,7 +77,7 @@ async function api(req, res, url) {
       const score = Number(b.score);
       if (!name || !Number.isFinite(score) || score < 0 || score > 1e8) return send(res, 400, { error: 'bad score' });
       if (b.modded) return send(res, 400, { error: '开了 MOD 的成绩不上榜' });
-      const entry = { name, score: Math.round(score), vehicle: String(b.vehicle || '').slice(0, 12), dist: Math.round(Number(b.dist) || 0), level: Number(b.level) || 0, at: new Date().toISOString() };
+      const entry = { name, score: Math.round(score), vehicle: String(b.vehicle || '').slice(0, 12), map: String(b.map || '').slice(0, 16), dist: Math.round(Number(b.dist) || 0), level: Number(b.level) || 0, at: new Date().toISOString() };
       board.push(entry);
       board.sort((a, z) => z.score - a.score);
       board.length = Math.min(board.length, 50);
