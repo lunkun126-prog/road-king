@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0e1422">
+<title>公路之王 Plus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" hidden>
+  <div class="hud-top">
+    <div id="hudLeft" class="panel hud-left"></div>
+    <div id="nav" class="pill nav">
+      <span class="nav-dir">↑ 直行</span>
+      <span class="tl"><i data-c="red"></i><i data-c="yellow"></i><i data-c="green"></i></span>
+      <b id="navDist">—</b>
+      <b id="navSec" class="nav-sec"></b>
+    </div>
+    <div class="hud-right">
+      <div id="limit" class="limit" hidden>60</div>
+      <button id="btnPause" class="icon-btn" aria-label="暂停">❚❚</button>
+    </div>
+  </div>
+  <div id="toasts"></div>
+  <div id="bigText"></div>
+  <div id="keyhint">W/S 油门刹车 · A/D 转向 · Q/E 转向灯 · H 喇叭 · L 大灯 · C 切视角 · Esc 暂停</div>
+
+  <div id="dash" class="dash">
+    <div class="minibtns">
+      <button id="bSigL" class="mini" aria-label="左转向灯">◀</button>
+      <button id="bHorn" class="mini" aria-label="喇叭">📣</button>
+      <button id="bLights" class="mini" aria-label="大灯">💡</button>
+      <button id="bCam" class="mini" aria-label="切换视角">🎥</button>
+      <button id="bSigR" class="mini" aria-label="右转向灯">▶</button>
+    </div>
+    <div class="dash-row">
+      <div class="steer-zone">
+        <div id="wheel" class="wheel">
+          <svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="86" fill="none" stroke="#5a6a80" stroke-width="22"/><circle cx="100" cy="100" r="93" fill="none" stroke="#c9d6e3" stroke-width="3" opacity=".5"/><path d="M100 100 L30 88 M100 100 L170 88 M100 100 L100 180" stroke="#5a6a80" stroke-width="18" stroke-linecap="round"/><circle cx="100" cy="100" r="26" fill="#76869c"/><rect x="95" y="10" width="10" height="16" rx="3" fill="#ffc93c"/></svg>
+        </div>
+        <div id="steerBtns" class="steer-btns" hidden>
+          <button id="bLeft" class="pedal">◀</button>
+          <button id="bRight" class="pedal">▶</button>
+        </div>
+      </div>
+      <div class="gauge">
+        <div class="sig"><i id="sigL">◀</i><i id="sigR">▶</i></div>
+        <div id="speed">0</div><small>km/h</small>
+        <div class="hp"><i id="hpBar"></i></div>
+        <small class="hp-label">完好度</small>
+      </div>
+      <div class="pedals">
+        <button id="pBrake" class="pedal brake">刹车</button>
+        <button id="pGas" class="pedal gas">油门</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 主菜单 ============ -->
+<section id="menu" class="screen">
+  <div class="menu-inner">
+    <div class="topbar">
+      <button id="nameChip" class="chip">👤 <span id="nameText">车手</span></button>
+      <div class="chip coins">🪙 <span class="coinText">0</span></div>
+    </div>
+    <h1 class="logo">公路之王<span>Plus</span></h1>
+    <p class="slogan">道路千万条，安全第一条</p>
+    <div class="modes">
+      <button class="mode-card" data-mode="exam"><em>🪪</em><b>驾考模式</b><small>6 关驾照考试 · 100 分起扣</small><span id="bestExam" class="best"></span></button>
+      <button class="mode-card hot" data-mode="king"><em>🛣️</em><b>公路之王</b><small>无尽车流 · 擦肩连击冲榜</small><span id="bestKing" class="best"></span></button>
+      <button class="mode-card" data-mode="rampage"><em>🚛</em><b>大运狂飙</b><small>开重卡 75 秒 · 创飞一切</small><span id="bestRampage" class="best"></span></button>
+    </div>
+    <nav class="menu-nav">
+      <button data-go="garage">🚗<span>车库</span></button>
+      <button data-go="board">🏆<span>排行榜</span></button>
+      <button data-go="settings">⚙️<span>设置</span></button>
+      <button data-go="help">❓<span>玩法</span></button>
+    </nav>
+  </div>
+</section>
+
+<section id="exam" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>驾考模式</h2></header>
+    <div id="levelList" class="levels"></div>
+  </div>
+</section>
+
+<section id="garage" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>车库</h2><div class="chip coins">🪙 <span class="coinText">0</span></div></header>
+    <div id="carList" class="cars"></div>
+    <p class="note">金币靠开车赚，没有广告。「大运狂飙」固定开大运重卡。</p>
+  </div>
+</section>
+
+<section id="board" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>排行榜</h2></header>
+    <div class="tabs"><button data-board="king" class="on">公路之王</button><button data-board="rampage">大运狂飙</button></div>
+    <ol id="boardList" class="board"></ol>
+  </div>
+</section>
+
+<section id="settings" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>设置</h2></header>
+    <label class="row">车手名<input id="setName" maxlength="16"></label>
+    <div class="row">触屏转向<div class="seg" id="setControl"><button data-v="wheel">方向盘</button><button data-v="buttons">左右键</button></div></div>
+    <label class="row">转向灵敏度 <span id="sensVal"></span><input id="setSens" type="range" min="0.6" max="1.6" step="0.05"></label>
+    <div class="row">默认视角<div class="seg" id="setCam"><button data-v="fp">第一人称</button><button data-v="tp">第三人称</button></div></div>
+    <label class="row">音量<input id="setVol" type="range" min="0" max="1" step="0.05"></label>
+    <h3>🔧 MOD 工具箱 <small>开了就不上榜</small></h3>
+    <label class="row check"><input type="checkbox" data-mod="invincible"> 无敌：撞谁谁飞，不掉血</label>
+    <label class="row check"><input type="checkbox" data-mod="speed"> 狂飙：极速 ×3.6</label>
+    <label class="row check"><input type="checkbox" data-mod="empty"> 空旷道路：没有车流</label>
+  </div>
+</section>
+
+<section id="help" class="screen" hidden>
+  <div class="sheet prose">
+    <header><button class="back">‹</button><h2>玩法</h2></header>
+    <h3>三种模式</h3>
+    <p><b>驾考模式</b>：100 分起扣，90 分及格。闯红灯、撞车直接挂科；超速、不打灯变道、蹭护栏、撞锥桶各扣分。满分三星。</p>
+    <p><b>公路之王</b>：越快分越高（60 km/h 以上加倍）。贴着车超过去叫「擦肩」，4 秒内连续擦肩叠连击，最高 ×10。路口红灯时横向有车流，敢闯就要会躲。</p>
+    <p><b>大运狂飙</b>：75 秒开大运，每创飞一辆 +1.5 秒，3 秒内连撞叠连击。</p>
+    <h3>读懂别人的车</h3>
+    <p>所有 NPC <b>变道前都会先打转向灯</b>——看到车尾橙灯闪就是要过来了。带「路怒」性格的会专门加塞到你前面再点刹车。</p>
+    <p><b>按喇叭</b>：前车打灯正要挤进你的车道时按，它会放弃；同车道慢车听到会让行；但路怒族可能会报复急刹。</p>
+    <h3>操作</h3>
+    <p>键盘：W/S 或 ↑/↓ 油门刹车，A/D 或 ←/→ 转向，Q/E 左右转向灯，H 喇叭，L 大灯，C 切视角，Esc 暂停。</p>
+    <p>手柄：左摇杆转向，RT/LT 油门刹车，LB/RB 转向灯，X 喇叭，Y 切视角。</p>
+    <p>触屏：左手拖方向盘（或设置里改成左右键），右手踩油门刹车，可以同时按。</p>
+    <p>碰撞按相对速度掉血：轻轻蹭一下只掉一点，高速追尾才会报废。</p>
+  </div>
+</section>
+
+<section id="brief" class="screen dim" hidden>
+  <div class="card center">
+    <small id="briefTag">驾考 · 第 1 关</small>
+    <h2 id="briefTitle"></h2>
+    <p id="briefTip"></p>
+    <button id="briefGo" class="btn primary">开始考试</button>
+    <button id="briefBack" class="btn ghost">返回</button>
+  </div>
+</section>
+
+<section id="pause" class="screen dim" hidden>
+  <div class="card center">
+    <h2>暂停</h2>
+    <button id="pResume" class="btn primary">继续</button>
+    <button id="pRestart" class="btn">重来</button>
+    <button id="pQuit" class="btn ghost">回主菜单</button>
+  </div>
+</section>
+
+<section id="result" class="screen dim" hidden>
+  <div class="card center result">
+    <small id="rTag"></small>
+    <h2 id="rTitle"></h2>
+    <div id="rStars" class="stars"></div>
+    <div id="rScore" class="big"></div>
+    <div id="rStats" class="stats"></div>
+    <ul id="rLog" class="log"></ul>
+    <div id="rReward" class="reward"></div>
+    <div class="btns">
+      <button id="rNext" class="btn primary" hidden>下一关</button>
+      <button id="rRetry" class="btn primary">再来一局</button>
+      <button id="rMenu" class="btn ghost">主菜单</button>
+    </div>
+  </div>
+</section>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
