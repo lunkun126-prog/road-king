@@ -33,7 +33,7 @@ export const CAR_TYPES = {
   car: { w: 1.85, l: 4.4, mass: 1, vMul: 1 },
   van: { w: 2.0, l: 5.2, mass: 1.6, vMul: 0.92 },
   bus: { w: 2.5, l: 11, mass: 5, vMul: 0.72 },
-  truck: { w: 2.5, l: 9, mass: 5, vMul: 0.75 },
+  truck: { w: 2.5, l: 7.5, mass: 5, vMul: 0.75 },
   moto: { w: 0.8, l: 2.1, mass: 0.3, vMul: 1.08 },
   cones: { w: 3.0, l: 40, mass: 99, vMul: 0 },
 };

@@ -2,7 +2,17 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ROAD_HALF, LANE_W, LANES, STEP, lightState, rng } from './road.js';
-import { cloneModel } from './models.js';
+import { cloneModel, hasModel, treeVariants } from './models.js';
+
+// 车型 → 模型 id（没有对应 glb 时 buildVehicle 退回代码画的车）
+const PLAYER_MODEL = { sedan: 'sedan', quadri: 'quadri', stoccarda: 'stoccarda', sport: 'sport', woking: 'woking', toro: 'toro', moto: 'moto_r1', ninja: 'moto_zx' };
+const PLAYER_KIND = { truck: 'playertruck', moto: 'moto', ninja: 'moto', sedan: 'sedan' };
+const RIDER_SUIT = { moto: 0x1e4fd6, ninja: 0x2fa84f };
+const NPC_MODELS = { car: ['npc_car1', 'npc_car2', 'npc_sport1', 'npc_sport2', 'npc_hatch', 'npc_wagon', 'npc_car1', 'npc_police'], van: ['npc_suv', 'npc_pickup'], bus: ['npc_bus'], truck: ['npc_truck'], moto: ['npc_moto'] };
+function npcModel(c) {
+  const list = (NPC_MODELS[c.kind] || []).filter(hasModel);
+  return list.length ? list[c.id % list.length] : null;
+}
 
 const CH = 100; // 块长
 const RW = ROAD_HALF + 0.4; // 路面半宽
@@ -319,6 +329,22 @@ export function buildVehicle(kind, color, modelId, riderSuit) {
 }
 
 function buildPed(p) {
+  const mid = ['ped_man', 'ped_woman'].filter(hasModel)[p.id % 2] || ['ped_man', 'ped_woman'].find(hasModel);
+  const model = mid ? cloneModel(mid) : null;
+  if (model) {
+    const G = new THREE.Group();
+    const k = p.h / 1.7;
+    model.scale.setScalar(k);
+    G.add(model);
+    let mixer = null;
+    if (model.userData.anim) {
+      mixer = new THREE.AnimationMixer(model);
+      const act = mixer.clipAction(model.userData.anim);
+      act.play();
+      act.time = Math.random() * act.getClip().duration;
+    }
+    return { group: G, mixer };
+  }
   const G = new THREE.Group();
   const s = p.h / 1.7;
   const skin = mat('skin', () => lambert(0xe0b594));
@@ -416,8 +442,9 @@ export class World {
     this.pool = {};
     this.lightObjs = [];
     if (this.player) this.scene.remove(this.player.group);
-    const vk = game.V.id === 'truck' ? 'playertruck' : game.V.id;
-    this.player = buildVehicle(vk, { sedan: 0xf4f4f0, sport: 0xffc400, moto: 0xe23b3b, truck: 0xd8342c }[game.V.id]);
+    const id = game.V.id;
+    const vk = PLAYER_KIND[id] || 'sport';
+    this.player = buildVehicle(vk, { sedan: 0xf4f4f0, truck: 0xd8342c }[id] ?? 0xffc400, PLAYER_MODEL[id], RIDER_SUIT[id]);
     this.scene.add(this.player.group);
     this.game = game;
     this.camInit = false;
@@ -489,7 +516,7 @@ export class World {
     for (const [id, m] of this.coinMeshes) if (!seen.has(id)) { this.scene.remove(m); this.coinMeshes.delete(id); }
   }
 
-  syncPeds(g) {
+  syncPeds(g, dt) {
     const seen = new Set();
     for (const p of g.peds) {
       seen.add(p.id);
@@ -500,6 +527,11 @@ export class World {
       G.position.set(_p.x, _p.y + (this.scenery === 'city' && Math.abs(p.x) > RW ? 0.05 : 0), _p.z);
       const face = p.kind === 'walk' ? (p.vs > 0 ? 0 : Math.PI) : p.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
       G.rotation.set(0, -_p.h + face, 0);
+      if (o.mixer) {
+        if (p.hit) { G.position.y += p.hit.y; G.rotation.x = p.hit.rx; G.rotation.z = p.hit.rz; }
+        else o.mixer.update(dt * (Math.abs(p.vs || p.vx) / 1.3));
+        continue;
+      }
       if (p.hit) {
         G.position.y += p.hit.y;
         G.rotation.x = p.hit.rx; G.rotation.z = p.hit.rz;
@@ -599,10 +631,20 @@ export class World {
     // 楼房 / 树 / 路灯
     const blds = [], trees = [], poles = [], lamps = [];
     const bldP = sc === 'city' ? 0.8 : sc === 'highway' ? 0.12 : 0;
+    const variants = snow ? [] : treeVariants();
+    const inst = new Map(); // variant -> [Matrix4]
     const addTrees = (s, sg, d0, d1, n, kind) => {
       for (let k = 0; k < n; k++) {
         const ss = s + (r() - 0.5) * 14, d = d0 + r() * (d1 - d0);
-        trees.push(placed(treeGeo(r, kind || (r() < 0.45 ? 'pine' : 'broad'), snow), road, ss, sg * (RW + d), groundAt(ss, sg, d) - 0.1, r() * 6.28));
+        const kd = kind || (r() < 0.45 ? 'pine' : 'broad');
+        if (kd === 'broad' && variants.length) {
+          const v = variants[Math.floor(r() * variants.length)];
+          road.toWorld(ss, sg * (RW + d), _q);
+          const sc = 0.75 + r() * 0.5;
+          const m4 = new THREE.Matrix4().compose(new THREE.Vector3(_q.x, _q.y + groundAt(ss, sg, d) - 0.1, _q.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), r() * 6.28), new THREE.Vector3(sc, sc, sc));
+          if (!inst.has(v)) inst.set(v, []);
+          inst.get(v).push(m4);
+        } else trees.push(placed(treeGeo(r, kd, snow), road, ss, sg * (RW + d), groundAt(ss, sg, d) - 0.1, r() * 6.28));
       }
     };
     for (const sg of [-1, 1]) {
@@ -634,6 +676,13 @@ export class World {
     }
     if (blds.length) G.add(new THREE.Mesh(mergeGeometries(blds), this.m.bld));
     if (trees.length) G.add(new THREE.Mesh(mergeGeometries(trees), this.m.tree));
+    for (const [v, mats] of inst) for (const part of v.parts) {
+      const im = new THREE.InstancedMesh(part.geometry, part.material, mats.length);
+      mats.forEach((m4, i) => im.setMatrixAt(i, m4));
+      im.computeBoundingSphere();
+      im.userData.shared = true; // 几何是模型共享的，拆块时别 dispose
+      G.add(im);
+    }
     if (poles.length) G.add(new THREE.Mesh(mergeGeometries(poles), this.m.pole));
     if (lamps.length) G.add(new THREE.Mesh(mergeGeometries(lamps), this.m.lamp));
 
@@ -659,10 +708,11 @@ export class World {
   carObj(c) {
     let o = this.cars.get(c.id);
     if (o) return o;
-    const key = c.kind === 'cones' ? null : c.kind;
+    const mid = c.kind === 'cones' ? null : npcModel(c);
+    const key = c.kind === 'cones' ? null : c.kind + ':' + (mid || '') + (mid ? ':' + c.color : '');
     if (c.kind === 'cones') o = buildCones(c.l);
     else if (this.pool[key]?.length) { o = this.pool[key].pop(); o.body.color.setHex(c.color); }
-    else o = buildVehicle(c.kind, c.color);
+    else o = buildVehicle(c.kind, c.color, mid, c.kind === 'moto' ? 0x333a44 + (c.id % 5) * 0x221100 : null);
     o.kind = key;
     this.scene.add(o.group);
     this.cars.set(c.id, o);
@@ -787,7 +837,7 @@ export class World {
     this.updateLights(g);
     this.syncCars(g, dt);
     this.syncCoins(g, dt);
-    this.syncPeds(g);
+    this.syncPeds(g, dt);
     for (const ev of view.events || []) {
       if (ev.type === 'crash') this.shake = Math.min(1.2, 0.3 + ev.impact / 60);
       if (ev.type === 'smash') this.shake = Math.min(1, 0.25 + ev.impact / 100);

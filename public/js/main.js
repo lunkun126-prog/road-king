@@ -1,6 +1,7 @@
 import { createGame, step, hudInfo, VEHICLES, EXAM_LEVELS, MODE_INFO, MAPS, WEATHERS } from './sim.js';
 import { laneCenter, LANES, lightState } from './road.js';
 import { World } from './render.js';
+import { loadModels } from './models.js';
 import { Sound } from './audio.js';
 import { Input } from './input.js';
 
@@ -509,6 +510,8 @@ function frame(now) {
 }
 
 await loadProfile();
+$('#nameText').textContent = '加载车模…';
+await loadModels((n, all) => { $('#nameText').textContent = `加载车模 ${n}/${all}`; });
 sound.setVolume(profile.settings.volume);
 bindUI();
 toMenu();

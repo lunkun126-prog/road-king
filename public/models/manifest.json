@@ -1,0 +1,205 @@
+{
+ "_note": "车头朝 -z；len=目标车长(米)，height=目标高度；rotY 为模型自身需要绕 y 轴转的角度；tint=可换色的材质名(正则)；hue=贴图色相旋转",
+ "sedan": {
+  "file": "car_sedan.glb",
+  "len": 4.5,
+  "rotY": 180,
+  "tint": "^Blue$",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/59a67a6c-490e-472e-bae6-5a4d2541f1c7"
+ },
+ "quadri": {
+  "file": "car_quadri.glb",
+  "len": 4.6,
+  "rotY": 180,
+  "author": "ReppenThe303",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/61b05999-8b17-4af1-a70c-8725e822f1e5"
+ },
+ "stoccarda": {
+  "file": "car_stoccarda.glb",
+  "len": 4.4,
+  "rotY": 270,
+  "author": "Chris Tarello",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/79e131da-1624-4ec1-b655-86ab3d9b166d"
+ },
+ "sport": {
+  "file": "car_cavallo.glb",
+  "len": 4.6,
+  "rotY": 180,
+  "author": "PuKkBuMXDD",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/95b46627-afff-4b11-95a8-c19e903c01e3"
+ },
+ "woking": {
+  "file": "car_woking.glb",
+  "len": 4.5,
+  "rotY": 0,
+  "author": "Nick Ladd",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/31c953b7-83c1-4b89-8a6b-08615e0a6567"
+ },
+ "toro": {
+  "file": "toro_v12.glb",
+  "len": 4.8,
+  "rotY": 180,
+  "author": "Ignition Labs",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/f8c6bcd5-92a2-4f88-b821-64935a00216f"
+ },
+ "moto_r1": {
+  "file": "moto_sport.glb",
+  "len": 2.1,
+  "rotY": 0,
+  "hue": 215,
+  "author": "Poly by Google",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/f7635710-7cfa-4768-ad70-8366ab485358"
+ },
+ "moto_zx": {
+  "file": "moto_sport.glb",
+  "len": 2.1,
+  "rotY": 0,
+  "hue": 105,
+  "author": "Poly by Google",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/f7635710-7cfa-4768-ad70-8366ab485358"
+ },
+ "npc_car1": {
+  "file": "npc_car1.glb",
+  "len": 4.4,
+  "rotY": 180,
+  "tint": "^LightBlue$",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/d35173c8-6078-4367-8f87-b1f2599f0bb7"
+ },
+ "npc_car2": {
+  "file": "car_sedan.glb",
+  "len": 4.4,
+  "rotY": 180,
+  "tint": "^Blue$",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/59a67a6c-490e-472e-bae6-5a4d2541f1c7"
+ },
+ "npc_sport1": {
+  "file": "npc_sport1.glb",
+  "len": 4.4,
+  "rotY": 180,
+  "tint": "^White$",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/34db1344-31cc-49ac-bc46-c055f68e39ca"
+ },
+ "npc_sport2": {
+  "file": "npc_sport2.glb",
+  "len": 4.4,
+  "rotY": 180,
+  "tint": "^Orange$",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/e6410e19-a88f-4158-bc91-c19fccf85028"
+ },
+ "npc_hatch": {
+  "file": "npc_hatch.glb",
+  "len": 4.0,
+  "rotY": 180,
+  "author": "Kay Lousberg",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/7dc33135-12c6-4de4-b5f9-cf445fd35994"
+ },
+ "npc_wagon": {
+  "file": "npc_wagon.glb",
+  "len": 4.6,
+  "rotY": 180,
+  "author": "Kay Lousberg",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/840253f1-676f-4d91-bd5c-9c6e3647ba73"
+ },
+ "npc_police": {
+  "file": "npc_police.glb",
+  "len": 4.6,
+  "rotY": 180,
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/179e43ce-b9e0-40cf-8b99-641693d3207e"
+ },
+ "npc_suv": {
+  "file": "npc_suv.glb",
+  "len": 4.8,
+  "rotY": 180,
+  "tint": "^White$",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/e5fbf2ee-5c9e-47d5-8ab6-80cacd463baa"
+ },
+ "npc_pickup": {
+  "file": "npc_pickup.glb",
+  "len": 5.2,
+  "rotY": 180,
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/4e925a01-dbb8-4aab-848b-221306b835ea"
+ },
+ "npc_truck": {
+  "file": "npc_truck.glb",
+  "len": 7.5,
+  "rotY": 180,
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/f4b28921-b45e-4653-b54c-c3976e4ea0fe"
+ },
+ "npc_bus": {
+  "file": "npc_bus.glb",
+  "len": 11,
+  "rotY": 0,
+  "author": "Poly by Google",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/aef0c3f0-78ee-44f0-82fd-4db228063ca6"
+ },
+ "npc_moto": {
+  "file": "npc_moto.glb",
+  "len": 2.1,
+  "rotY": 90,
+  "author": "jeremy",
+  "license": "CC-BY 3.0",
+  "source": "https://poly.pizza/m/7d230a92-464a-4d1c-874e-712240e2db20"
+ },
+ "ped_man": {
+  "file": "ped_man.glb",
+  "height": 1.75,
+  "rotY": 180,
+  "anim": "Walk",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/3746be88-6799-4817-929b-6bc067c47caa"
+ },
+ "ped_woman": {
+  "file": "ped_woman.glb",
+  "height": 1.65,
+  "rotY": 180,
+  "anim": "Walk",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/51d5abdd-bb87-4b8d-9967-21738ffb8437"
+ },
+ "tree_maple": {
+  "file": "tree_maple.glb",
+  "height": 8,
+  "split": true,
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/cdfcf39f-f8c7-44a6-bb3f-82afe42fc141"
+ },
+ "tree_birch": {
+  "file": "tree_birch.glb",
+  "height": 10,
+  "split": true,
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "source": "https://poly.pizza/m/457b2397-4bfb-41c4-862d-82d1592b2a5f"
+ }
+}
