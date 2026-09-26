@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Road, laneCenter, lightState, STEP } from '../public/js/road.js';
-import { createGame, step, hudInfo, EXAM_LEVELS } from '../public/js/sim.js';
+import { createGame, step, hudInfo, EXAM_LEVELS, DUO_DIST, DUO_WRECK } from '../public/js/sim.js';
 
 const DT = 1 / 60;
 
@@ -144,4 +144,55 @@ test('所有驾考关卡配置可创建', () => {
     run(g, 5, (g) => autopilot(g, {}));
     assert.ok(Number.isFinite(g.player.s));
   }
+});
+
+// ---------- 双人对战 ----------
+const GAS = { throttle: 1, brake: 0, steer: 0 }, IDLE = { throttle: 0, brake: 0, steer: 0 };
+const duoRun = (g, sec, inps) => { for (let i = 0; i < sec * 60 && !g.over; i++) step(g, inps, DT); };
+
+test('双人：两辆车并排出发，各开各的，分数分开算；可以选同一辆车', () => {
+  const g = createGame({ mode: 'duo', vehicles: ['toro', 'toro'], seed: 5, map: 'highway' });
+  assert.equal(g.duo, true); assert.equal(g.mode, 'king'); assert.equal(g.duoDist, DUO_DIST);
+  const [A, B] = g.players;
+  assert.equal(A.V.id, 'toro'); assert.equal(B.V.id, 'toro');
+  assert.notEqual(A.x, B.x, '不同车道');
+  duoRun(g, 6, [GAS, IDLE]);
+  assert.ok(A.s > 60 && B.s < 1, `1P 踩油门跑了 ${A.s.toFixed(0)}m，2P 没动 ${B.s.toFixed(1)}m`);
+  assert.ok(hudInfo(g, A).score > 0 && hudInfo(g, B).score === 0, '分数各算各的');
+  assert.ok(hudInfo(g, A).kmh > 50 && hudInfo(g, B).kmh === 0);
+});
+
+test('双人：先冲过终点的赢，比赛立刻结束', () => {
+  const g = createGame({ mode: 'duo', vehicles: ['sport', 'sedan'], seed: 9, map: 'mountain', dist: 400 });
+  duoRun(g, 60, [GAS, IDLE]);
+  assert.ok(g.over, '有人到终点就结束');
+  assert.equal(g.result.duo, true); assert.equal(g.result.winner, 0);
+  assert.equal(g.result.players[0].stats.dist, 400);
+  assert.ok(g.result.players[1].left > 390, '2P 还差一大截');
+  assert.equal(g.result.coins, 0, '双人不给金币');
+});
+
+test('双人：互相追尾两边都掉血；撞毁的原地趴窝几秒后满血复活、短暂无敌', () => {
+  const g = createGame({ mode: 'duo', vehicles: ['truck', 'sedan'], seed: 3, map: 'mountain' });
+  const [A, B] = g.players;
+  B.s = 30; B.x = A.x; A.s = 30 - (A.l + B.l) / 2 + 0.4; A.v = 25; B.hp = 0.5;
+  const hpA = A.hp;
+  g.cars = [];
+  step(g, [IDLE, IDLE], DT);
+  assert.ok(A.hp < hpA, '后车也掉血');
+  assert.ok(B.out > 0 && B.v === 0, '前车被撞毁，趴窝');
+  assert.ok(g.events.some((e) => e.type === 'wrecked' && e.p === 1), '事件标明是 2P');
+  duoRun(g, DUO_WRECK.wait + 0.2, [IDLE, GAS]);
+  assert.equal(B.out, 0); assert.equal(B.hp, B.V.hp, '满血复活'); assert.ok(B.ghostT > 0, '复活后无敌');
+  assert.ok(!g.over, '车毁不结束比赛');
+});
+
+test('双人：路上车流、金币、行人两个人附近都有', () => {
+  const g = createGame({ mode: 'duo', vehicles: ['sedan', 'sedan'], seed: 11, map: 'city' });
+  g.players[0].s = 2000;   // 1P 甩开 2 公里
+  duoRun(g, 3, [IDLE, IDLE]);
+  for (const P of g.players) {
+    assert.ok(g.cars.some((c) => !c.cross && Math.abs(c.s - P.s) < 650), `${P.pid + 1}P 附近有车`);
+  }
+  assert.ok(g.coins.some((c) => c.s > 2000), '领先的人前面有金币');
 });

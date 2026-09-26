@@ -650,6 +650,20 @@ function buildCones(len) {
 }
 
 // 车漆/玻璃反光用的户外环境：天空渐变 + 地面 + 一颗很亮的太阳，预滤波成 PMREM
+// 双人：车顶上的「1P / 2P」牌子，永远朝向相机、不被遮挡，远远也能认出是谁
+function tagSprite(text, color, top) {
+  const tex = canvasTex(128, 64, (c, w, h) => {
+    c.fillStyle = color; c.beginPath(); c.roundRect ? c.roundRect(4, 4, w - 8, h - 8, 16) : c.rect(4, 4, w - 8, h - 8); c.fill();
+    c.lineWidth = 5; c.strokeStyle = '#fff'; c.stroke();
+    c.fillStyle = '#fff'; c.font = 'bold 40px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, w / 2, h / 2 + 2);
+  }, false);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, fog: false, transparent: true }));
+  s.scale.set(1.5, 0.75, 1);
+  s.position.y = (top || 1.5) + 0.9;
+  s.renderOrder = 10;
+  return s;
+}
+
 function skyEnvMap(renderer) {
   const s = new THREE.Scene();
   const R = 50, g = new THREE.SphereGeometry(R, 48, 24);
@@ -708,11 +722,13 @@ export class World {
     this.cars = new Map();
     this.pool = {};
     this.lightObjs = [];
-    this.shake = 0;
     this.camMode = 'fp';
-    this.camPos = new THREE.Vector3();
-    this.camLook = new THREE.Vector3();
-    this.camInit = false;
+    // 每台相机一份跟车状态：v1 = 单人/1P 用主相机；双人时 2P 另开一台相机（分屏右半边）
+    const view = (cam) => ({ cam, pos: new THREE.Vector3(), look: new THREE.Vector3(), init: false, shake: 0 });
+    this.v1 = view(this.camera);
+    this.v2 = view(new THREE.PerspectiveCamera(70, 1, 0.1, 1200));
+    this.head2 = new THREE.SpotLight(0xfff2cc, 0, 110, 0.62, 0.45, 1);
+    this.scene.add(this.head2, this.head2.target);
     this.far = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000).rotateX(-Math.PI / 2), lambert(0x6f8f5a));
     this.far.position.y = -9;
     this.scene.add(this.far);
@@ -769,17 +785,18 @@ export class World {
     this.cars.clear();
     this.pool = {};
     this.lightObjs = [];
-    if (this.player) this.scene.remove(this.player.group);
+    for (const o of [this.player, this.player2]) if (o) this.scene.remove(o.group);
     const id = game.V.id;
-    const vk = PLAYER_KIND[id] || 'sport';
-    this.player = buildVehicle(vk, { sedan: 0xf4f4f0, truck: 0xd8342c }[id] ?? 0xffc400, PLAYER_MODEL[id], RIDER_SUIT[id], { driver: true });
-    this.steerVis = 0;
-    this.scene.add(this.player.group);
-    const pb = new THREE.Box3().setFromObject(this.player.group);   // 量车顶高、车头位置，给引擎盖/车内视角定位
-    this.player.top = pb.max.y; this.player.front = -pb.min.z;
+    this.player = this.playerCar(id);
+    this.player2 = null;
+    if (game.duo) {   // 双人：第二辆玩家车；车顶挂 1P / 2P 牌子（两人选同一辆车也分得清）
+      this.player2 = this.playerCar(game.players[1].V.id);
+      this.player.group.add(tagSprite('1P', '#2f7bff', this.player.top));
+      this.player2.group.add(tagSprite('2P', '#ff3b4d', this.player2.top));
+    }
     this.buildCockpit(id, !!game.V.rider);
     this.game = game;
-    this.camInit = false;
+    this.v1.init = this.v2.init = false;
     this.finishMesh = null;
     this.scenery = game.mode === 'king' ? game.map.id : 'city';
     this.snow = game.weather.id === 'snow';
@@ -789,6 +806,15 @@ export class World {
     this.coinMeshes = new Map();
     this.pedMeshes = new Map();
     this.setupWeather(game.weather.id);
+  }
+
+  // 玩家的车：量好车顶高、车头位置，给引擎盖/车内视角和头顶牌子定位
+  playerCar(id) {
+    const o = buildVehicle(PLAYER_KIND[id] || 'sport', { sedan: 0xf4f4f0, truck: 0xd8342c }[id] ?? 0xffc400, PLAYER_MODEL[id], RIDER_SUIT[id], { driver: true });
+    this.scene.add(o.group);
+    const pb = new THREE.Box3().setFromObject(o.group);
+    o.top = pb.max.y; o.front = -pb.min.z; o.steerVis = 0;
+    return o;
   }
 
   setupWeather(kind) {
@@ -810,12 +836,13 @@ export class World {
     this.scene.add(this.precip);
   }
 
-  updateWeather(dt, speed) {
+  // cam：雨雪围着哪台相机转（双人分屏时两台相机各渲染前都挪一次）
+  updateWeather(dt, speed, cam = this.camera) {
     if (!this.precip) return;
     const a = this.precip.geometry.attributes.position, arr = a.array;
     const rain = this.precipKind === 'rain', stride = rain ? 6 : 3;
     const fall = rain ? 26 : 1.6, n = arr.length / stride, t = performance.now() / 1000;
-    const c = this.camera.position;
+    const c = cam.position;
     for (let i = 0; i < n; i++) {
       const o = i * stride;
       arr[o + 1] -= fall * dt;
@@ -1020,23 +1047,25 @@ export class World {
     if (poles.length) G.add(new THREE.Mesh(mergeGeometries(poles), this.m.pole));
     if (lamps.length) G.add(new THREE.Mesh(mergeGeometries(lamps), this.m.lamp));
 
-    // 驾考终点线
-    const lv = this.game.lv;
-    if (lv && lv.dist >= s0 && lv.dist < s1) {
-      G.add(new THREE.Mesh(placed(new THREE.PlaneGeometry(LANES * LANE_W, 3).rotateX(-Math.PI / 2), road, lv.dist, 0, 0.035), this.m.finish));
+    // 终点线：驾考 / 双人对战
+    const fin = this.game.lv?.dist ?? this.game.duoDist;
+    if (fin >= s0 && fin < s1) {
+      G.add(new THREE.Mesh(placed(new THREE.PlaneGeometry(LANES * LANE_W, 3).rotateX(-Math.PI / 2), road, fin, 0, 0.035), this.m.finish));
       const arch = [];
-      for (const sg of [-1, 1]) arch.push(placed(new THREE.BoxGeometry(0.5, 6, 0.5).translate(0, 3, 0), road, lv.dist, sg * (ROAD_HALF + 0.8), 0));
-      arch.push(placed(new THREE.BoxGeometry(2 * ROAD_HALF + 2, 1.2, 0.4).translate(0, 6, 0), road, lv.dist, 0, 0));
+      for (const sg of [-1, 1]) arch.push(placed(new THREE.BoxGeometry(0.5, 6, 0.5).translate(0, 3, 0), road, fin, sg * (ROAD_HALF + 0.8), 0));
+      arch.push(placed(new THREE.BoxGeometry(2 * ROAD_HALF + 2, 1.2, 0.4).translate(0, 6, 0), road, fin, 0, 0));
       G.add(new THREE.Mesh(mergeGeometries(arch), mat('arch', () => new THREE.MeshLambertMaterial({ color: 0x1e7a3c, emissive: 0x1e7a3c, emissiveIntensity: 0.4 }))));
     }
     this.scene.add(G);
     return chunk;
   }
 
-  syncChunks(s) {
-    const c0 = Math.floor((s - 120) / CH), c1 = Math.floor((s + 520) / CH);
-    for (const [ci, c] of this.chunks) if (ci < c0 || ci > c1) { this.disposeChunk(c); this.chunks.delete(ci); }
-    for (let ci = c0; ci <= c1; ci++) if (!this.chunks.has(ci)) this.chunks.set(ci, this.buildChunk(ci));
+  // ss：要显示的道路位置（双人分屏时两个人各一段）
+  syncChunks(ss) {
+    const want = new Set();
+    for (const s of ss) for (let ci = Math.floor((s - 120) / CH); ci <= Math.floor((s + 520) / CH); ci++) want.add(ci);
+    for (const [ci, c] of this.chunks) if (!want.has(ci)) { this.disposeChunk(c); this.chunks.delete(ci); }
+    for (const ci of [...want].sort((a, b) => a - b)) if (!this.chunks.has(ci)) this.chunks.set(ci, this.buildChunk(ci));
   }
 
   carObj(c) {
@@ -1167,88 +1196,143 @@ export class World {
     }
   }
 
-  update(g, dt, view = {}) {
-    if (g !== this.game) this.reset(g);
-    const P = g.player, road = g.road;
+  // 道路/车流/金币/行人等场景同步（单人、双人共用）；ss = 要显示的道路位置，viewOf(ev) = 这条碰撞事件震哪台相机
+  syncWorld(g, dt, ss, events, viewOf) {
     this.setEnv(g);
-    this.syncChunks(P.s);
+    this.syncChunks(ss);
     this.updateLights(g);
     this.syncCars(g, dt);
     this.syncCoins(g, dt);
     this.syncPeds(g, dt);
-    for (const ev of view.events || []) {
-      if (ev.type === 'crash') this.shake = Math.min(1.2, 0.3 + ev.impact / 60);
-      if (ev.type === 'smash') this.shake = Math.min(1, 0.25 + ev.impact / 100);
-      if (ev.type === 'scrape') this.shake = Math.max(this.shake, 0.25);
+    for (const ev of events || []) {
+      const v = viewOf(ev);
+      if (ev.type === 'crash') v.shake = Math.min(1.2, 0.3 + ev.impact / 60);
+      if (ev.type === 'smash') v.shake = Math.min(1, 0.25 + ev.impact / 100);
+      if (ev.type === 'scrape') v.shake = Math.max(v.shake, 0.25);
+      if (ev.type === 'bump') { this.v1.shake = Math.max(this.v1.shake, 0.5); this.v2.shake = Math.max(this.v2.shake, 0.5); }
       if (ev.type === 'cones') this.knockCones(ev);
     }
-    // 玩家
+  }
+
+  // 玩家车的位置、侧倾、方向盘、转向灯/刹车灯/大灯
+  posePlayer(o, P, V, g, dt, braking) {
     const lean = Math.atan2(P.xv, Math.max(P.v, 3));
-    road.toWorld(P.s, P.x, _p);
-    const pg = this.player.group;
+    g.road.toWorld(P.s, P.x, _p);
+    const pg = o.group;
     pg.position.set(_p.x, _p.y, _p.z);
-    pg.rotation.set(0, -_p.h - lean, g.V.rider ? -P.steer * 0.35 : 0);
-    if (this.player.steer) {
+    pg.rotation.set(0, -_p.h - lean, V.rider ? -P.steer * 0.35 : 0);
+    if (o.steer) {
       // 方向盘(和握着它的手)跟着转向走，平滑一下免得抖
-      this.steerVis += (P.steer * 1.9 - this.steerVis) * Math.min(1, dt * 10);
-      this.player.steer(this.steerVis);
+      o.steerVis += (P.steer * 1.9 - o.steerVis) * Math.min(1, dt * 10);
+      o.steer(o.steerVis);
     }
     const blinkOn = Math.floor(g.t * 2.6) % 2 === 0;
-    this.player.blinkL.emissiveIntensity = blinkOn && P.signal === 'L' ? 2.5 : 0;
-    this.player.blinkR.emissiveIntensity = blinkOn && P.signal === 'R' ? 2.5 : 0;
-    this.player.tail.emissiveIntensity = view.braking ? 2.2 : 0.5;
-    this.player.head.emissiveIntensity = P.lightsOn ? 2 : 0.2;
-    // 大灯
-    this.head.intensity = P.lightsOn ? 150 + this.night * 450 : 0;
-    road.toWorld(P.s + 1, P.x, _q);
-    this.head.position.set(_q.x, _q.y + 1.2, _q.z);
-    road.toWorld(P.s + 40, P.x + P.xv * 1.5, _q);
-    this.head.target.position.set(_q.x, _q.y, _q.z);
-    this.sun.position.set(_p.x + 60, _p.y + 120, _p.z + 40);
-    this.sun.target.position.set(_p.x, _p.y, _p.z);
+    o.blinkL.emissiveIntensity = blinkOn && P.signal === 'L' ? 2.5 : 0;
+    o.blinkR.emissiveIntensity = blinkOn && P.signal === 'R' ? 2.5 : 0;
+    o.tail.emissiveIntensity = braking ? 2.2 : 0.5;
+    o.head.emissiveIntensity = P.lightsOn ? 2 : 0.2;
+  }
 
-    // 相机
-    // 视角：tp 追车 / near 近追 / hood 引擎盖 / fp 车内。车身一直显示（车内看得到车头），只有摩托车内视角藏骑手
-    const mode = view.cam || this.camMode;
+  // 大灯聚光灯跟着车走
+  aimHead(spot, P, road) {
+    spot.intensity = P.lightsOn ? 150 + this.night * 450 : 0;
+    road.toWorld(P.s + 1, P.x, _q);
+    spot.position.set(_q.x, _q.y + 1.2, _q.z);
+    road.toWorld(P.s + 40, P.x + P.xv * 1.5, _q);
+    spot.target.position.set(_q.x, _q.y, _q.z);
+  }
+
+  // 相机跟车。视角：tp 追车 / near 近追 / hood 引擎盖 / fp 车内
+  followCam(v, g, P, V, o, mode, dt, snap) {
+    const road = g.road, cam = v.cam;
     const fp = mode === 'fp', rigid = fp || mode === 'hood';
-    pg.visible = !fp;
-    if (this.cockpit) this.cockpit.visible = fp;
-    const eye = g.V.rider ? 1.75 : ({ sedan: 1.2, quadri: 1.15, stoccarda: 1.0, sport: 1.0, woking: 0.95, toro: 0.95, truck: 2.7 }[g.V.id] ?? 1.2);
+    const py = road.toWorld(P.s, P.x, _p).y;
+    const eye = V.rider ? 1.75 : ({ sedan: 1.2, quadri: 1.15, stoccarda: 1.0, sport: 1.0, woking: 0.95, toro: 0.95, truck: 2.7 }[V.id] ?? 1.2);
     const pos = new THREE.Vector3(), look = new THREE.Vector3();
     if (rigid) {
       // 车内：驾驶位眼高；引擎盖：车顶前沿再高一点往前看（车头在画面下方）
-      const top = this.player.top || eye + 0.3, front = this.player.front || g.V.l / 2;
-      const fwd = fp ? (g.V.id === 'truck' ? front - 1.2 : -g.V.l * 0.08) : front - Math.min(2.2, g.V.l * 0.5);
-      const side = fp && !g.V.rider ? 0.35 : 0;
+      const top = o.top || eye + 0.3, front = o.front || V.l / 2;
+      const fwd = fp ? (V.id === 'truck' ? front - 1.2 : -V.l * 0.08) : front - Math.min(2.2, V.l * 0.5);
+      const side = fp && !V.rider ? 0.35 : 0;
       const up = fp ? eye : top + 0.35;
       road.toWorld(P.s + fwd, P.x - side, _q);
       pos.set(_q.x, _q.y + up, _q.z);
       road.toWorld(P.s + 30, P.x - side + P.xv * 1.6, _q);
       look.set(_q.x, _q.y + up * 0.72, _q.z);
     } else {
-      const big = g.V.id === 'truck' ? 1.8 : 1;
+      const big = V.id === 'truck' ? 1.8 : 1;
       const [back, h, ahead, lookY] = mode === 'near' ? [5.0, 1.9, 6, 0.2] : [7.4, 2.9, 6, -0.2];   // 看点压低：车落在画面中上部，不被底部仪表挡
       road.toWorld(P.s - back * big, P.x * 0.85, _q);
-      pos.set(_q.x, Math.max(_q.y, _p.y) + h * big, _q.z);
+      pos.set(_q.x, Math.max(_q.y, py) + h * big, _q.z);
       road.toWorld(P.s + ahead * big, P.x, _q);
       look.set(_q.x, _q.y + lookY * big, _q.z);
     }
-    if (!this.camInit || view.snap) { this.camPos.copy(pos); this.camLook.copy(look); this.camInit = true; }
+    if (!v.init || snap) { v.pos.copy(pos); v.look.copy(look); v.init = true; }
     const k = rigid ? 1 : 1 - Math.pow(0.0005, dt);
-    this.camPos.lerp(pos, k); this.camLook.lerp(look, rigid ? 1 : 1 - Math.pow(0.0001, dt));
-    this.camera.position.copy(this.camPos);
-    if (this.shake > 0) {
-      this.camera.position.x += (Math.random() - 0.5) * this.shake * 0.5;
-      this.camera.position.y += (Math.random() - 0.5) * this.shake * 0.4;
-      this.shake = Math.max(0, this.shake - dt * 2);
+    v.pos.lerp(pos, k); v.look.lerp(look, rigid ? 1 : 1 - Math.pow(0.0001, dt));
+    cam.position.copy(v.pos);
+    if (v.shake > 0) {
+      cam.position.x += (Math.random() - 0.5) * v.shake * 0.5;
+      cam.position.y += (Math.random() - 0.5) * v.shake * 0.4;
+      v.shake = Math.max(0, v.shake - dt * 2);
     }
-    this.camera.lookAt(this.camLook);
-    if (fp) this.camera.rotateZ(-P.steer * 0.03);
-    const kmh = P.v * 3.6;
-    this.camera.fov = (fp ? 66 : 62) + Math.min(24, kmh / 11);
-    this.camera.updateProjectionMatrix();
+    cam.lookAt(v.look);
+    if (fp) cam.rotateZ(-P.steer * 0.03);
+    cam.fov = (fp ? 66 : 62) + Math.min(24, (P.v * 3.6) / 11);
+    cam.updateProjectionMatrix();
+  }
+
+  update(g, dt, view = {}) {
+    if (g !== this.game) this.reset(g);
+    if (g.duo) { this.updateDuo(g, dt, view); return; }
+    const P = g.player, road = g.road;
+    this.syncWorld(g, dt, [P.s], view.events, () => this.v1);
+    this.posePlayer(this.player, P, g.V, g, dt, view.braking);
+    this.aimHead(this.head, P, road);
+    road.toWorld(P.s, P.x, _p);
+    this.sun.position.set(_p.x + 60, _p.y + 120, _p.z + 40);
+    this.sun.target.position.set(_p.x, _p.y, _p.z);
+    // 车身一直显示（车内看得到车头），只有车内视角藏车身、显示驾驶舱
+    const mode = view.cam || this.camMode;
+    this.player.group.visible = mode !== 'fp';
+    if (this.cockpit) this.cockpit.visible = mode === 'fp';
+    this.camera.aspect = window.innerWidth / window.innerHeight;   // 双人分屏时改成过半屏，回单人要改回来
+    this.followCam(this.v1, g, P, g.V, this.player, mode, dt, view.snap);
     this.updateWeather(dt, P.v);
+    road.toWorld(P.s, P.x, _p);
     this.far.position.x = _p.x; this.far.position.z = _p.z;
     this.renderer.render(this.scene, this.camera);
+  }
+
+  // 双人分屏：左半边 1P、右半边 2P，同一个场景两台相机各渲染一次。没有车内视角（驾驶舱挂在主相机上，两边会串）
+  updateDuo(g, dt, view) {
+    const PS = g.players, road = g.road, objs = [this.player, this.player2], views = [this.v1, this.v2];
+    this.syncWorld(g, dt, PS.map((P) => P.s), view.events, (ev) => views[ev.p] || this.v1);
+    PS.forEach((P, i) => {
+      this.posePlayer(objs[i], P, P.V, g, dt, view.braking?.[i]);
+      objs[i].group.visible = !(P.ghostT > 0) || Math.floor(g.t * 10) % 2 === 0;   // 复活后无敌：闪烁
+    });
+    this.aimHead(this.head, PS[0], road);
+    this.aimHead(this.head2, PS[1], road);
+    road.toWorld(PS[0].s, PS[0].x, _p);
+    this.sun.position.set(_p.x + 60, _p.y + 120, _p.z + 40);
+    this.sun.target.position.set(_p.x, _p.y, _p.z);
+    if (this.cockpit) this.cockpit.visible = false;
+    const mode = view.cam === 'fp' ? 'tp' : view.cam || 'tp';
+    const r = this.renderer, W = window.innerWidth, H = window.innerHeight, hw = Math.floor(W / 2);
+    r.setScissorTest(true);
+    PS.forEach((P, i) => {
+      const v = views[i];
+      v.cam.aspect = hw / H;
+      this.followCam(v, g, P, P.V, objs[i], mode, dt, view.snap);
+      this.updateWeather(i ? 0 : dt, P.v, v.cam);   // 雨雪粒子围着这台相机转一下再画
+      road.toWorld(P.s, P.x, _p);
+      this.far.position.x = _p.x; this.far.position.z = _p.z;
+      r.setViewport(i * hw, 0, i ? W - hw : hw, H);
+      r.setScissor(i * hw, 0, i ? W - hw : hw, H);
+      r.render(this.scene, v.cam);
+    });
+    r.setScissorTest(false);
+    r.setViewport(0, 0, W, H);
   }
 }

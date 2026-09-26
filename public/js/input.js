@@ -94,4 +94,24 @@ export class Input {
     this.edges = [];
     return { inp: out, actions };
   }
+
+  // 双人：1P = W A S D，2P = 方向键；插了手柄的话第 1 个给 1P、第 2 个给 2P。返回 [1P, 2P] 的输入 + UI 动作
+  readDuo(settings) {
+    const k = this.keys;
+    const keysOf = (up, down, left, right) => ({ steer: (k.has(right) ? 1 : 0) - (k.has(left) ? 1 : 0), throttle: k.has(up) ? 1 : 0, brake: k.has(down) ? 1 : 0, analog: false, sens: settings.sens });
+    const inps = [keysOf('KeyW', 'KeyS', 'KeyA', 'KeyD'), keysOf('ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight')];
+    const pads = (navigator.getGamepads ? [...navigator.getGamepads()] : []).filter(Boolean);
+    pads.slice(0, 2).forEach((gp, i) => {
+      const o = inps[i], ax = gp.axes[0] || 0;
+      if (Math.abs(ax) > 0.12) { o.steer = ax; o.analog = true; }
+      o.throttle = Math.max(o.throttle, gp.buttons[7]?.value || 0, gp.buttons[0]?.pressed ? 1 : 0);
+      o.brake = Math.max(o.brake, gp.buttons[6]?.value || 0, gp.buttons[1]?.pressed ? 1 : 0);
+      const key = 'gpDuo' + gp.index, p = !!gp.buttons[9]?.pressed;   // Start 键暂停
+      if (p && !this[key]) this.edges.push('Escape');
+      this[key] = p;
+    });
+    const actions = this.edges.filter((c) => !['KeyQ', 'KeyE', 'KeyH', 'KeyL'].includes(c));   // 双人不用转向灯/喇叭/大灯
+    this.edges = [];
+    return { inps, actions };
+  }
 }

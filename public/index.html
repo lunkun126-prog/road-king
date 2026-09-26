@@ -84,6 +84,7 @@
       <button class="mode-card" data-mode="exam"><em>🪪</em><b>驾考模式</b><small>8 关驾照考试 · 雨夜冰雪都有</small><span id="bestExam" class="best"></span></button>
       <button class="mode-card hot" data-mode="king"><em>🛣️</em><b>公路之王</b><small>城市 / 高速 / 山路 · 捡金币冲榜</small><span id="bestKing" class="best"></span></button>
       <button class="mode-card" data-mode="rampage"><em>🚛</em><b>大运狂飙</b><small>开重卡 75 秒 · 创飞一切</small><span id="bestRampage" class="best"></span></button>
+      <button class="mode-card duo" data-mode="duo"><em>👥</em><b>双人对战</b><small>一台电脑两个人 · 先到 10 公里终点赢</small></button>
     </div>
     <nav class="menu-nav">
       <button data-go="signin" id="navSign">📅<span>签到</span><i class="dot" hidden></i></button>
@@ -209,7 +210,8 @@
 <section id="help" class="screen" hidden>
   <div class="sheet prose">
     <header><button class="back">‹</button><h2>玩法</h2></header>
-    <h3>三种模式</h3>
+    <h3>四种模式</h3>
+    <p><b>双人对战</b>：一台电脑两个人左右分屏，1P 用 W A S D、2P 用方向键（插两个手柄也行）。同一条路上比谁先冲过 10 公里终点；两个人能互相撞，车撞毁了原地等 3 秒复活。</p>
     <p><b>驾考模式</b>：8 关，100 分起扣，90 分及格。闯红灯、撞车、撞到行人直接挂科；超速、不打灯变道、蹭护栏、撞锥桶各扣分。满分三星。</p>
     <p><b>公路之王</b>：三条路线——<b>城市主干道</b>（车多、红绿灯、行人）、<b>滨海高速</b>（车少没红绿灯，放开跑）、<b>盘山公路</b>（几乎没车，急弯连坡）。越快分越高；贴着车超过去叫「擦肩」，4 秒内连续擦肩叠连击，最高 ×10。路上的金币一枚 5 金币。撞到行人扣 800 分。</p>
     <p><b>天气</b>：雨天刹车变长、稍滑；<b>下雪路面很滑</b>，转向跟手慢、刹车距离接近翻倍，要提前减速。</p>
@@ -237,6 +239,35 @@
     <button id="briefBack" class="btn ghost">返回</button>
   </div>
 </section>
+
+<!-- ============ 双人对战：选路线 / 天气 / 各自的车 ============ -->
+<section id="duoSetup" class="screen dim" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>双人对战</h2></header>
+    <p class="note">一台电脑两个人，左右分屏：<span class="ptag p1">1P</span> 在左边，用 <b>W A S D</b>；<span class="ptag p2">2P</span> 在右边，用 <b>↑ ↓ ← →</b>。同一条路，谁先冲过 <b>10 公里</b>终点谁赢。车随便选，两个人可以选同一辆（不带车手加成和改装，不算金币和排行榜）。</p>
+    <h3>选路线</h3>
+    <div id="duoMaps" class="maps"></div>
+    <div class="seg wx" id="duoWeather"><button data-v="clear">☀️ 晴天</button><button data-v="rain">🌧️ 雨天</button><button data-v="snow">❄️ 下雪</button></div>
+    <div class="duo-picks">
+      <div><h3><span class="ptag p1">1P</span> 左边 · W A S D</h3><div id="duoCars0" class="duo-cars"></div></div>
+      <div><h3><span class="ptag p2">2P</span> 右边 · ↑ ↓ ← →</h3><div id="duoCars1" class="duo-cars"></div></div>
+    </div>
+    <button id="duoGo" class="btn primary">开始对战</button>
+  </div>
+</section>
+
+<!-- 双人分屏 HUD：中间分隔线，两边各一块仪表，顶上是比赛进度条 -->
+<div id="duoHud" hidden>
+  <div class="duo-split"></div>
+  <div class="duo-race"><div class="duo-track"><i class="flag">🏁</i><b id="duoDot0" class="dot p1">1P</b><b id="duoDot1" class="dot p2">2P</b></div></div>
+  <button id="duoPause" class="icon-btn" aria-label="暂停">❚❚</button>
+  <div id="duoToasts0" class="duo-toasts"></div>
+  <div id="duoToasts1" class="duo-toasts right"></div>
+  <div id="duoP0" class="duo-side p1"></div>
+  <div id="duoP1" class="duo-side p2"></div>
+  <div id="duoBig"></div>
+  <div id="duoKeys"><span class="ptag p1">1P</span> W A S D　　<span class="ptag p2">2P</span> ↑ ↓ ← →　　Esc 暂停 · C 切视角</div>
+</div>
 
 <section id="pause" class="screen dim" hidden>
   <div class="card center">

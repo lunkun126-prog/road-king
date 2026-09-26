@@ -58,7 +58,9 @@ let hintShown = false;
 
 function show(id) {
   for (const s of $$('.screen')) s.hidden = s.id !== id;
-  $('#hud').hidden = !(state === 'play' || state === 'pause' || (state === 'result' && game));
+  const inGame = state === 'play' || state === 'pause' || (state === 'result' && !!game);
+  $('#hud').hidden = !inGame || !!game?.duo;
+  $('#duoHud').hidden = !inGame || !game?.duo;
 }
 
 // ---------- 菜单演示：自动驾驶 ----------
@@ -87,6 +89,7 @@ function autopilot(g) {
 
 // ---------- 开局 ----------
 function start(mode, level = 1) {
+  if (mode === 'duo') { startDuo(); return; }
   current = { mode, level };
   sound.unlock();
   if (!VEHICLES[profile.vehicle]) profile.vehicle = 'sedan';
@@ -130,11 +133,12 @@ function toMenu() {
 }
 
 // ---------- HUD ----------
-function toast(text, cls = 'info') {
+// side：双人时提示显示在哪个玩家那半边（0 = 1P 左、1 = 2P 右；不传就显示在 1P 那边）
+function toast(text, cls = 'info', side = 0) {
   const el = document.createElement('div');
   el.className = 'toast ' + cls;
   el.textContent = text;
-  const box = $('#toasts');
+  const box = game?.duo ? $('#duoToasts' + (side ? 1 : 0)) : $('#toasts');
   box.appendChild(el);
   while (box.children.length > 4) box.firstChild.remove();
   setTimeout(() => el.remove(), 1800);
@@ -292,6 +296,106 @@ function openSetup() {
   refreshMenu();
   fromSetup = false;
   show('setup');
+}
+
+// ---------- 双人对战：一台电脑左右分屏，1P = WASD、2P = 方向键，先到终点的赢 ----------
+const duoCfg = () => (profile.duo ||= { map: 'city', weather: 'clear', cars: ['sedan', 'sport'] });
+function openDuoSetup() {
+  state = 'menu';
+  const C = duoCfg();
+  $('#duoMaps').innerHTML = Object.values(MAPS).map((m) => `<button class="map${C.map === m.id ? ' sel' : ''}" data-map="${m.id}"><em>${MAP_ICON[m.id]}</em><b>${m.name}</b><small>${m.desc}</small></button>`).join('');
+  for (const b of $$('#duoMaps [data-map]')) b.onclick = () => { C.map = b.dataset.map; sound.click(); saveProfile(); openDuoSetup(); };
+  for (const b of $$('#duoWeather button')) b.classList.toggle('on', b.dataset.v === C.weather);
+  [0, 1].forEach((i) => {
+    const box = $('#duoCars' + i);
+    box.innerHTML = Object.values(VEHICLES).map((v) => `<button class="duo-car${C.cars[i] === v.id ? ' sel' : ''}" data-car="${v.id}"><b>${v.name}</b><small>${v.desc.includes('极速') ? '' : `极速 ${Math.round(v.maxV * 3.6)} · `}${v.desc}</small></button>`).join('');
+    for (const b of box.querySelectorAll('[data-car]')) b.onclick = () => { C.cars[i] = b.dataset.car; sound.click(); saveProfile(); openDuoSetup(); };
+  });
+  show('duoSetup');
+}
+
+function startDuo() {
+  current = { mode: 'duo', level: 1 };
+  sound.unlock();
+  const C = duoCfg();
+  game = createGame({ mode: 'duo', vehicles: C.cars, map: C.map, weather: C.weather, seed: (Math.random() * 1e9) | 0 });
+  cam = CAMS.includes(profile.settings.cam) && profile.settings.cam !== 'fp' ? profile.settings.cam : 'tp';   // 分屏没有车内视角
+  state = 'play';
+  show(null);
+  hudCache = {};
+  syncMusic(); const song = music.play(); if (song) toast('🎵 ' + Music.title(song) + '（N 键换歌）');
+  duoBig('GO!');
+  const k = $('#duoKeys'); k.classList.remove('gone'); setTimeout(() => k.classList.add('gone'), 7000);
+  if (matchMedia('(pointer: coarse)').matches) toast('双人对战要用键盘（或插两个手柄）', 'red');
+}
+
+function duoBig(text) {
+  const el = $('#duoBig');
+  el.textContent = text;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
+
+function drawDuoHud(g) {
+  g.players.forEach((P, i) => {
+    const h = hudInfo(g, P), hp = Math.max(0, h.hp), left = Math.max(0, g.duoDist - P.s) / 1000;
+    const status = h.out ? `<div class="duo-out">车毁了，${Math.ceil(h.out)} 秒后复活</div>` : h.ghost ? '<div class="duo-ghost">复活无敌中</div>' : '';
+    const combo = h.combo > 1 && h.comboT > 0 ? ` · 连击 ×${h.combo}` : '';
+    setHTML('#duoP' + i, `<div class="duo-head"><span class="ptag p${i + 1}">${i + 1}P</span>${P.V.name}</div>
+      <div class="duo-spd">${h.kmh}<small>km/h</small></div>
+      <div class="hp"><i style="width:${hp * 100}%;background:${hp > 0.6 ? 'var(--green)' : hp > 0.3 ? 'var(--gold)' : 'var(--red)'}"></i></div>
+      <div class="duo-meta">离终点 <b>${left.toFixed(2)}</b> km</div>
+      <div class="duo-meta">得分 ${h.score} · 🪙 ${h.coins}${combo}</div>${status}`);
+    $('#duoDot' + i).style.left = Math.min(100, (P.s / g.duoDist) * 100) + '%';
+  });
+}
+
+function handleDuoEvents(g, events) {
+  for (const e of events) {
+    const side = e.p;
+    switch (e.type) {
+      case 'combo': toast(e.text, 'gold', side); sound.whoosh(e.combo); break;
+      case 'crash': sound.crash(e.impact); if (e.impact > 25) toast(`追尾 -${Math.round(e.dmg)} 完好度`, 'red', side); break;
+      case 'smash': sound.smash(); toast('创飞！', 'gold', side); break;
+      case 'bump': sound.crash(e.impact); toast('互撞！', 'red', 0); toast('互撞！', 'red', 1); break;
+      case 'scrape': case 'cones': sound.scrape(); break;
+      case 'coin': sound.coin(); break;
+      case 'ped': sound.crash(20); toast(e.text, 'red', side); break;
+      case 'wrecked': sound.crash(80); toast(e.text, 'red', side); break;
+      case 'respawn': toast('复活！', 'info', side); break;
+      case 'redrun': toast('闯红灯！小心横向来车', 'red', side); break;
+      case 'over': onDuoOver(g, e.result); break;
+    }
+  }
+}
+
+function onDuoOver(g, R) {
+  sound.win();
+  duoBig(`${R.winner + 1}P 赢了！`);
+  setTimeout(() => { if (state === 'play') showDuoResult(g, R); }, 1600);
+}
+
+function showDuoResult(g, R) {
+  state = 'result';
+  show('result');
+  const card = $('#result .card');
+  card.classList.remove('fail'); card.classList.add('win');
+  const [A, B] = R.players, w = R.winner, lose = R.players[1 - w];
+  $('#rTag').textContent = `双人对战 · ${g.map.name}${g.weather.id !== 'clear' ? ' · ' + g.weather.name : ''} · 终点 ${+(g.duoDist / 1000).toFixed(1)} 公里`;
+  $('#rTitle').innerHTML = `<span class="ptag p${w + 1}">${w + 1}P</span> 赢了！`;
+  $('#rStars').hidden = true; $('#rLog').hidden = true; $('#rNext').hidden = true;
+  const m = Math.floor(R.time / 60), s = Math.round(R.time % 60);
+  $('#rScore').textContent = `用时 ${m}:${String(s).padStart(2, '0')}`;
+  const row = (k, a, b, hi = null) => `<tr><td>${k}</td><td class="${hi === 0 ? 'win' : ''}">${a}</td><td class="${hi === 1 ? 'win' : ''}">${b}</td></tr>`;
+  const more = (a, b) => (a === b ? null : a > b ? 0 : 1);
+  $('#rStats').innerHTML = `<table class="duo-tab"><tr><td></td><th><span class="ptag p1">1P</span></th><th><span class="ptag p2">2P</span></th></tr>
+    ${row('座驾', A.vehicle, B.vehicle)}
+    ${row('跑了', (A.stats.dist / 1000).toFixed(2) + ' km', (B.stats.dist / 1000).toFixed(2) + ' km', more(A.stats.dist, B.stats.dist))}
+    ${row('最高时速', Math.round(A.stats.maxKmh), Math.round(B.stats.maxKmh), more(A.stats.maxKmh, B.stats.maxKmh))}
+    ${row('得分', A.score.toLocaleString(), B.score.toLocaleString(), more(A.score, B.score))}
+    ${row('擦肩', A.stats.nearMiss, B.stats.nearMiss, more(A.stats.nearMiss, B.stats.nearMiss))}
+    ${row('捡金币', A.stats.coins, B.stats.coins, more(A.stats.coins, B.stats.coins))}
+    ${row('撞车', A.stats.crash, B.stats.crash)}</table>`;
+  $('#rReward').textContent = `${w + 1}P 先冲过终点，${2 - w}P 还差 ${(lose.left / 1000).toFixed(2)} 公里 · 双人对战不计金币和排行榜`;
 }
 
 // ---------- 小地图：以车头朝上，显示前方 ~450 米 ----------
@@ -577,8 +681,11 @@ function bindUI() {
   for (const c of $$('.mode-card')) c.onclick = () => {
     sound.unlock(); sound.click();
     const m = c.dataset.mode;
-    if (m === 'exam') { renderLevels(); show('exam'); } else if (m === 'king') openSetup(); else start(m);
+    if (m === 'exam') { renderLevels(); show('exam'); } else if (m === 'king') openSetup(); else if (m === 'duo') openDuoSetup(); else start(m);
   };
+  $('#duoGo').onclick = () => startDuo();
+  for (const b of $$('#duoWeather button')) b.onclick = () => { duoCfg().weather = b.dataset.v; sound.click(); saveProfile(); openDuoSetup(); };
+  $('#duoPause').onclick = pause;
   for (const b of $$('.menu-nav button')) b.onclick = () => {
     sound.unlock(); sound.click();
     const id = b.dataset.go;
@@ -664,11 +771,15 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
-  const { inp, actions } = input.read(dt, profile.settings);
+  const duo = !!game?.duo;
+  const { inp, inps, actions } = duo ? input.readDuo(profile.settings) : input.read(dt, profile.settings);
   for (const a of actions) {
     if (a === 'Escape' && !$('#driverCard').hidden) { closeDriverCard(); continue; }
     if (a === 'Escape' || a === 'KeyP') state === 'play' ? pause() : state === 'pause' && resume();
-    if (a === 'KeyC' && game) { cam = CAMS[(CAMS.indexOf(cam) + 1) % CAMS.length]; $('#dash').classList.toggle('fp', cam === 'fp'); toast(CAM_NAME[cam] + '（C 键切换）'); }
+    if (a === 'KeyC' && game) {
+      do cam = CAMS[(CAMS.indexOf(cam) + 1) % CAMS.length]; while (duo && cam === 'fp');   // 分屏没有车内视角
+      $('#dash').classList.toggle('fp', cam === 'fp'); toast(CAM_NAME[cam] + '（C 键切换）');
+    }
     if (a === 'KeyM') { const m = sound.toggleMute(); music.a.muted = m; toast(m ? '已静音' : '声音已开'); }
     if (a === 'KeyN' && game && state === 'play') { const s = music.next(); toast(s ? '🎵 ' + Music.title(s) : '音乐文件夹里还没有歌'); }
     if ((a === 'Enter' || a === 'Space') && state === 'result') start(current.mode, current.level);
@@ -679,11 +790,20 @@ function frame(now) {
     let acc = dt;
     while (acc > 1e-6) {
       const h = Math.min(acc, 1 / 60);
-      step(game, inp, h);
-      inp.signal = inp.horn = inp.lights = undefined;
+      step(game, duo ? inps : inp, h);
+      if (!duo) inp.signal = inp.horn = inp.lights = undefined;
       acc -= h;
     }
     const events = game.events.slice();
+    if (duo) {
+      handleDuoEvents(game, events);
+      world.update(game, dt, { events, cam, braking: inps.map((i) => i.brake > 0) });
+      drawDuoHud(game);
+      for (const P of game.players) P.lightsOn = world.night > 0.35;   // 双人没有 L 键：天黑自动开大灯
+      const L = game.players[0].s >= game.players[1].s ? 0 : 1, P = game.players[L];   // 引擎声跟跑在前面的人
+      sound.engine(P.v, P.V.maxV, inps[L].throttle, P.V.id, !game.over);
+      return;
+    }
     handleEvents(game, events);
     world.update(game, dt, { events, cam, braking: inp.brake > 0 });
     drawHud(game);

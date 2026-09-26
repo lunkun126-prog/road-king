@@ -53,11 +53,19 @@ export const MODE_INFO = {
   exam: { name: '驾考模式', desc: '8 关驾照考试，100 分起扣，90 分及格' },
   king: { name: '公路之王', desc: '无尽车流，弯道坡道红绿灯；擦肩连击冲榜' },
   rampage: { name: '大运狂飙', desc: '75 秒开重卡横冲直撞，创飞越多分越高' },
+  duo: { name: '双人对战', desc: '同一条路上比谁先冲过 10 公里终点' },
 };
+export const DUO_DIST = 10000;   // 双人对战终点(米)
+export const DUO_WRECK = { wait: 3, ghost: 2 };   // 双人：车毁后原地等几秒复活、复活后无敌几秒
 
 const PALETTE = [0xd94c4c, 0x3d6fd9, 0xe8e8e8, 0x2b2b2b, 0xf0c33c, 0x3fa66b, 0x8a5cc7, 0xe07a2f, 0x9aa5b1, 0x5ac8d8];
 
-export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods = {}, seed = Date.now() & 0xffffff, map = 'city', weather = 'clear', tune = null } = {}) {
+// 双人对战(mode 'duo')：规则同公路之王(g.mode 仍是 'king')，另加 g.duo；vehicles = [1P 的车, 2P 的车]，可以相同。
+// 两个玩家在 g.players 里；分数/连击/统计等「每人一份」的字段平时挂在各自的 player 上，
+// step 轮到谁就把谁的绑到 g 上(withPlayer)，所以单人模式的各个函数原样可用。
+export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', vehicles = null, mods = {}, seed = Date.now() & 0xffffff, map = 'city', weather = 'clear', tune = null, dist = DUO_DIST } = {}) {
+  const duo = mode === 'duo';
+  if (duo) { mode = 'king'; tune = null; mods = {}; }   // 双人比公平：不带车手加成、改装和 MOD
   const lv = mode === 'exam' ? EXAM_LEVELS[level - 1] : null;
   const vid = mode === 'rampage' ? 'truck' : VEHICLES[vehicle] ? vehicle : 'sedan';
   const T = { maxV: 1, accel: 1, steer: 1, hp: 1, coinMul: 1, comboMul: 1, rampageTime: 0, examCoinMul: 1, ...(tune || {}) };
@@ -84,6 +92,18 @@ export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods =
     exam: lv ? { points: 100, flags: {}, log: [], failed: null } : null,
     timeLeft: mode === 'rampage' ? 75 + T.rampageTime : lv?.time ?? 0,
   };
+  g.player.V = V;
+  if (duo) {
+    g.duo = true;
+    g.duoDist = dist;
+    g.players = (vehicles || ['sedan', 'sedan']).slice(0, 2).map((id, i) => {
+      const Vi = { ...(VEHICLES[id] || VEHICLES.sedan) };
+      return { ...g.player, V: Vi, x: laneCenter(1 + i), lane: 1 + i, hp: Vi.hp, w: Vi.w, l: Vi.l, mass: Vi.mass, lightsOn: false,   // 大灯由界面按天色自动开关
+        pid: i, pk: i ? 'passed' + i : 'passed', out: 0, ghostT: 0, tune: T,
+        score: 0, combo: 0, comboT: 0, coinCount: 0, best: { combo: 0 }, stats: { ...g.stats } };
+    });
+    bind(g, g.players[0]);
+  }
   if (mode !== 'rampage') g.player.v = 0; else g.player.v = 60 / KMH;
   fillTraffic(g);
   for (let i = 0; i < 14; i++) spawnWalker(g, g.player.s - 60 + g.rand() * 480);
@@ -93,24 +113,41 @@ export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods =
 // ---------- 工具 ----------
 const exS = (o) => (o.cross ? o.w / 2 : o.l / 2);
 const exX = (o) => (o.cross ? o.l / 2 : o.w / 2);
-const emit = (g, type, data = {}) => g.events.push({ type, t: g.t, ...data });
+const emit = (g, type, data = {}) => g.events.push({ type, t: g.t, p: g.player?.pid || 0, ...data });   // p = 哪个玩家触发的(双人)
+
+// ---------- 双人：玩家切换 ----------
+const playersOf = (g) => g.players || [g.player];
+const leadS = (g) => (g.players ? Math.max(g.players[0].s, g.players[1].s) : g.player.s);
+const tailS = (g) => (g.players ? Math.min(g.players[0].s, g.players[1].s) : g.player.s);
+const OWN = ['score', 'combo', 'comboT', 'coinCount'];   // 数值：绑定时拷到 g 上，解绑时写回
+function bind(g, P) {
+  g.player = P; g.V = P.V; g.tune = P.tune; g.best = P.best; g.stats = P.stats;
+  for (const k of OWN) g[k] = P[k];
+}
+function syncBack(g) { if (g.duo) for (const k of OWN) g.player[k] = g[k]; }
+function withPlayer(g, P, fn) {
+  if (!g.duo || g.player === P) return fn();
+  const prev = g.player;
+  syncBack(g); bind(g, P);
+  try { return fn(); } finally { syncBack(g); bind(g, prev); }
+}
 
 function trafficLevel(g) {
   if (g.mods.empty) return 0;
   if (g.lv) return g.lv.traffic;
   if (g.mode === 'rampage') return 1.9;
-  return g.map.traffic * Math.min(1.7, 0.7 + g.player.s / 9000);
+  return g.map.traffic * Math.min(1.7, 0.7 + leadS(g) / 9000);
 }
 function aggroRatio(g) {
   if (g.lv) return g.lv.aggro;
   if (g.mode === 'rampage') return 0.1;
-  return Math.min(0.35, 0.08 + g.player.s / 25000);
+  return Math.min(0.35, 0.08 + leadS(g) / 25000);
 }
 function aiSpeedKmh(g) {
   const wx = g.grip < 0.6 ? 0.8 : g.grip < 0.9 ? 0.92 : 1;
   if (g.lv) return [g.lv.limit * 0.7, g.lv.limit * 0.95];
   if (g.mode === 'rampage') return [50, 80];
-  const up = Math.min(40, g.player.s / 250);
+  const up = Math.min(40, leadS(g) / 250);
   const [lo, hi] = g.map.ai;
   return [(lo + up) * wx, (hi + up) * wx];
 }
@@ -140,8 +177,7 @@ function pickKind(g) {
 
 function spotFree(g, s, lane, margin = 22) {
   const x = laneCenter(lane);
-  const P = g.player;
-  if (Math.abs(P.s - s) < margin + 6 && Math.abs(P.x - x) < 3) return false;
+  for (const P of playersOf(g)) if (Math.abs(P.s - s) < margin + 6 && Math.abs(P.x - x) < 3) return false;
   for (const c of g.cars) if (!c.cross && Math.abs(c.s - s) < margin + exS(c) && Math.abs(c.x - x) < 3) return false;
   return true;
 }
@@ -156,16 +192,17 @@ function fillTraffic(g) {
 }
 
 function spawnTraffic(g, dt) {
-  const P = g.player;
-  // 回收
+  const PS = playersOf(g);
+  // 回收：离所有玩家都远了才收（双人拉开距离时两头都要有车）
   g.cars = g.cars.filter((c) => {
     if (c.wreck) return c.wreck.t < 3.5;
-    if (c.cross) return Math.abs(c.x) < 55 && c.s > P.s - 150;
-    return c.s > P.s - 170 && c.s < P.s + 650;
+    if (c.cross) return Math.abs(c.x) < 55 && PS.some((P) => c.s > P.s - 150);
+    return PS.some((P) => c.s > P.s - 170 && c.s < P.s + 650);
   });
   const want = Math.round(trafficLevel(g) * 26);
-  const live = g.cars.filter((c) => !c.cross && !c.wreck && c.kind !== 'cones').length;
-  if (live < want) {
+  for (const P of PS) {
+    const live = g.cars.filter((c) => !c.cross && !c.wreck && c.kind !== 'cones' && c.s > P.s - 170 && c.s < P.s + 650).length;
+    if (live >= want) continue;
     const ahead = P.v > 22 || g.rand() < 0.75;
     const s = ahead ? P.s + 320 + g.rand() * 120 : P.s - 120;
     const lane = Math.floor(g.rand() * LANES);
@@ -179,8 +216,9 @@ function spawnTraffic(g, dt) {
   }
   // 施工占道
   const wantCones = g.lv ? g.lv.cones : g.mode === 'king' && g.map.cones;
-  if (wantCones && P.s + 420 > g.conesAt) {
-    const s = Math.max(P.s + 380, g.conesAt);
+  const lead = leadS(g);
+  if (wantCones && lead + 420 > g.conesAt) {
+    const s = Math.max(lead + 380, g.conesAt);
     const light = g.road.nextLightAfter(s - 80);
     if (!light || Math.abs(light.s - s) > 120) {
       const lane = g.rand() < 0.5 ? 0 : LANES - 1 - Math.floor(g.rand() * 2);
@@ -192,7 +230,7 @@ function spawnTraffic(g, dt) {
     g.conesAt = s + (g.lv ? 500 : 700 + g.rand() * 900);
   }
   // 路口横向车流
-  for (const L of g.road.lightsNear(P.s - 60, P.s + 380)) {
+  for (const L of lightsNearPlayers(g, 60, 380)) {
     const st = lightState(L, g.t);
     g.crossTimers[L.id] = (g.crossTimers[L.id] ?? 0) - dt;
     if (st.cross && g.crossTimers[L.id] <= 0) {
@@ -205,10 +243,17 @@ function spawnTraffic(g, dt) {
   }
 }
 
+// 任一玩家附近的红绿灯（按 id 去重，单人时就是原来那一段）
+function lightsNearPlayers(g, back, fwd) {
+  if (!g.players) return g.road.lightsNear(g.player.s - back, g.player.s + fwd);
+  const m = new Map();
+  for (const P of g.players) for (const L of g.road.lightsNear(P.s - back, P.s + fwd)) m.set(L.id, L);
+  return [...m.values()];
+}
+
 // ---------- NPC ----------
 function leaderOf(g, c, laneX) {
   let gap = Infinity, lv = 0, who = null;
-  const P = g.player;
   const check = (o) => {
     if (o === c || o.wreck) return;
     const d = o.s - c.s;
@@ -219,7 +264,7 @@ function leaderOf(g, c, laneX) {
     if (gp < gap) { gap = gp; lv = o.cross ? 0 : o.v; who = o; }
   };
   for (const o of g.cars) check(o);
-  check(P);
+  for (const P of playersOf(g)) check(P);
   for (const p of g.peds) if (!p.hit && p.kind !== 'walk' && Math.abs(p.x) < ROAD_HALF + 1.5) check(p);
   // 停止线
   const L = g.road.nextLightAfter(c.s + c.l / 2 - 0.5);
@@ -238,7 +283,6 @@ function leaderOf(g, c, laneX) {
 
 function laneSafe(g, c, lane, strict) {
   const x = laneCenter(lane);
-  const P = g.player;
   const test = (o) => {
     if (o === c || o.wreck || o.cross) return true;
     if (Math.abs(o.x - x) > 2.6) return true;
@@ -247,7 +291,7 @@ function laneSafe(g, c, lane, strict) {
     return -d - len > Math.max(strict ? 9 : 4, (o.v - c.v) * 2.5 + (strict ? 6 : 1));
   };
   for (const o of g.cars) if (!test(o)) return false;
-  return test(P);
+  return playersOf(g).every(test);
 }
 
 function startLaneChange(c, dir, signalT, dur) {
@@ -255,18 +299,20 @@ function startLaneChange(c, dir, signalT, dur) {
 }
 
 function think(g, c, lead) {
-  const P = g.player;
   c.thinkT = 0.8 + g.rand() * 2.2;
   if (c.lc || c.stalled || c.kind === 'cones') return;
-  // 路怒族：玩家在相邻车道身后且更快 → 打灯加塞
+  // 路怒族：玩家在相邻车道身后且更快 → 打灯加塞（双人时挑符合条件的那个玩家）
   if (c.aggro && c.cutCD <= 0) {
-    const behind = c.s - P.s;
-    const pl = laneOf(P.x);
-    if (behind > (c.l + P.l) / 2 + 5 && behind < 38 && Math.abs(pl - c.lane) === 1 && P.v > c.v - 1 && g.rand() < 0.55) {
-      startLaneChange(c, pl - c.lane, 0.75, 1.05);
-      c.lc.cut = true;
-      c.cutCD = 9;
-      return;
+    for (const P of playersOf(g)) {
+      const behind = c.s - P.s;
+      const pl = laneOf(P.x);
+      if (behind > (c.l + P.l) / 2 + 5 && behind < 38 && Math.abs(pl - c.lane) === 1 && P.v > c.v - 1 && g.rand() < 0.55) {
+        startLaneChange(c, pl - c.lane, 0.75, 1.05);
+        c.lc.cut = true;
+        c.cutCD = 9;
+        c.cutP = P;
+        return;
+      }
     }
   }
   const blocked = lead.who && lead.who !== 'light' && lead.gap < 45 && lead.lv < c.vDes - 3;
@@ -317,7 +363,7 @@ function updateCar(g, c, dt) {
   }
 
   // IDM 跟车
-  const vDes = c.stalled ? 0 : c.brakeT > 0 ? Math.max(0, g.player.v * 0.55) : c.vDes;
+  const vDes = c.stalled ? 0 : c.brakeT > 0 ? Math.max(0, (c.cutP || g.player).v * 0.55) : c.vDes;
   c.brakeT -= dt;
   const a0 = 2.2, b = 3.2 * g.grip, s0 = 2.4;
   let acc = vDes > 0.1 ? a0 * (1 - Math.pow(c.v / vDes, 4)) : -4;
@@ -332,7 +378,7 @@ function updateCar(g, c, dt) {
 }
 
 function cutStillValid(g, c) {
-  const P = g.player;
+  const P = c.cutP || g.player;
   return c.s - P.s > (c.l + P.l) / 2 + 3;
 }
 
@@ -352,7 +398,7 @@ function honk(g) {
     c.lc = null; c.cutCD = 12; c.thinkT = 4;
     emit(g, 'yield', { id: c.id, text: '对方被喇叭劝退' });
   } else if (!c.lc && c.lane === pl) {
-    if (c.aggro && g.rand() < 0.35) { c.brakeT = 1.2; emit(g, 'angry', { id: c.id, text: '路怒！对方急刹' }); return; }
+    if (c.aggro && g.rand() < 0.35) { c.brakeT = 1.2; c.cutP = P; emit(g, 'angry', { id: c.id, text: '路怒！对方急刹' }); return; }
     for (const d of [1, -1]) {
       const to = c.lane + d;
       if (to >= 0 && to < LANES && laneSafe(g, c, to, false)) { startLaneChange(c, d, 0.6, 1.4); emit(g, 'yield', { id: c.id, text: '前车让行' }); return; }
@@ -400,10 +446,15 @@ function finish(g, ok, reason) {
 }
 
 function damage(g, amt, reason) {
-  if (g.mods.invincible) return;
   const P = g.player;
+  if (g.mods.invincible || P.out > 0 || P.ghostT > 0) return;
   P.hp = Math.max(0, P.hp - amt);
-  if (P.hp <= 0) finish(g, g.mode === 'rampage', reason || '车辆报废');
+  if (P.hp > 0) return;
+  if (!g.duo) { finish(g, g.mode === 'rampage', reason || '车辆报废'); return; }
+  // 双人：不结束，原地趴窝几秒再复活（比赛里耽误的这几秒就是惩罚）
+  P.out = DUO_WRECK.wait; P.v = 0; P.xv = 0;
+  g.combo = 0; g.comboT = 0;
+  emit(g, 'wrecked', { text: `${reason || '车辆报废'}！${DUO_WRECK.wait} 秒后复活` });
 }
 
 function addCombo(g, pts, label) {
@@ -473,6 +524,12 @@ function collide(g, c) {
 
 function updatePlayer(g, inp, dt) {
   const P = g.player, V = g.V, M = g.mods;
+  if (P.out > 0) {   // 双人：车毁了趴窝，时间到了满血复活、短暂无敌
+    P.out -= dt; P.v = 0; P.xv = 0; P.steer = 0;
+    if (P.out <= 0) { P.out = 0; P.hp = V.hp; P.ghostT = DUO_WRECK.ghost; emit(g, 'respawn'); }
+    return 0;
+  }
+  if (P.ghostT > 0) P.ghostT -= dt;
   const sens = inp.sens ?? 1;
   const speedMul = M.speed ? 3.6 : 1;
   const maxV = V.maxV * speedMul;
@@ -566,19 +623,19 @@ function checkLights(g, prevS) {
 }
 
 function nearMisses(g) {
-  const P = g.player;
+  const P = g.player, pk = P.pk || 'passed';   // 双人：每个玩家各记一份「超过这辆车没有」
   for (const c of g.cars) {
     if (c.wreck || c.kind === 'cones') continue;
     if (c.cross) {
       const rel = Math.sign(c.x - P.x);
-      if (c.passed !== null && rel !== c.passed && Math.abs(c.s - P.s) - (c.w / 2 + P.l / 2) < 2.2 && c.hitCD <= 0) {
+      if (c[pk] != null && rel !== c[pk] && Math.abs(c.s - P.s) - (c.w / 2 + P.l / 2) < 2.2 && c.hitCD <= 0) {
         g.stats.nearMiss++; addCombo(g, 300, '路口穿越');
       }
-      c.passed = rel;
+      c[pk] = rel;
       continue;
     }
     const rel = P.s - c.s > 0;
-    if (c.passed === false && rel) {
+    if (c[pk] === false && rel) {
       g.stats.overtake++;
       const gap = Math.abs(P.x - c.x) - (P.w + c.w) / 2;
       if (gap < 1.0 && P.v - c.v > 4 && c.hitCD <= 0 && !c.stalled) {
@@ -586,12 +643,13 @@ function nearMisses(g) {
         addCombo(g, P.v * KMH > 120 ? 180 : 100, gap < 0.45 ? '极限擦肩' : '擦肩');
       }
     }
-    c.passed = rel;
+    c[pk] = rel;
   }
 }
 
 // ---------- 主步进 ----------
 // inp: {throttle, brake, steer, analog, sens, cruise(m/s), signal:'L'|'R'(边沿), horn(边沿), lights(边沿)}
+// 双人时 inp 是 [1P 的输入, 2P 的输入]
 export function step(g, inp, dt) {
   if (g.over) return;
   dt = Math.min(dt, 1 / 20);
@@ -600,6 +658,7 @@ export function step(g, inp, dt) {
     g.timeLeft -= dt;
     if (g.mode === 'rampage' && g.timeLeft <= 0) { g.timeLeft = 0; finish(g, true, '时间到'); return; }
   }
+  if (g.duo) { stepDuo(g, inp, dt); return; }
   const prevS = g.player.s;
   updatePlayer(g, inp, dt);
   if (g.over) return;
@@ -620,8 +679,67 @@ export function step(g, inp, dt) {
   if (g.exam && !g.over) examRules(g, dt);
 }
 
-export function hudInfo(g) {
-  const P = g.player;
+function stepDuo(g, inps, dt) {
+  const PS = g.players, prev = PS.map((P) => P.s);
+  PS.forEach((P, i) => withPlayer(g, P, () => { updatePlayer(g, inps?.[i] || {}, dt); checkLights(g, prev[i]); }));
+  spawnTraffic(g, dt);
+  for (const c of g.cars) updateCar(g, c, dt);
+  for (const P of PS) withPlayer(g, P, () => {
+    if (!P.out && !(P.ghostT > 0)) {   // 复活后无敌的几秒直接穿过去
+      for (const c of g.cars) {
+        if (c.wreck) continue;
+        if (Math.abs(c.s - P.s) < exS(c) + P.l / 2 && Math.abs(c.x - P.x) < exX(c) + P.w / 2) collide(g, c);
+      }
+    }
+    nearMisses(g);
+  });
+  bumpPlayers(g, PS[0], PS[1]);
+  updateCoins(g);
+  updatePeds(g, dt);
+  syncBack(g);
+  for (const P of PS) P.stats.dist = P.s;
+  // 终点：谁先冲过谁赢；同一步都过线，跑得远的赢
+  const done = PS.filter((P) => P.s >= g.duoDist);
+  if (done.length) finishDuo(g, done.reduce((a, b) => (b.s > a.s ? b : a)).pid);
+}
+
+// 两个玩家互相碰：追尾按动量交换，并排就左右弹开；两边都掉一点血、断连击
+function bumpPlayers(g, A, B) {
+  if (A.out || B.out || A.ghostT > 0 || B.ghostT > 0) return;
+  const penS = (A.l + B.l) / 2 - Math.abs(A.s - B.s), penX = (A.w + B.w) / 2 - Math.abs(A.x - B.x);
+  if (penS <= 0 || penX <= 0 || (g.bumpT || 0) > g.t) return;
+  g.bumpT = g.t + 0.4;
+  const impact = Math.hypot(A.v - B.v, A.xv - B.xv) * KMH;
+  if (penX < penS) {
+    const side = Math.sign(B.x - A.x) || 1;
+    A.x -= side * (penX / 2 + 0.05); B.x += side * (penX / 2 + 0.05);
+    A.xv = -side * 2.5; B.xv = side * 2.5;
+  } else {
+    const [F, R] = A.s >= B.s ? [A, B] : [B, A];   // 前车、后车
+    const m1 = R.mass, m2 = F.mass, e = 0.3, v1 = R.v, v2 = F.v, vcm = (m1 * v1 + m2 * v2) / (m1 + m2);
+    R.v = Math.max(0, vcm - (e * (v1 - v2) * m2) / (m1 + m2));
+    F.v = Math.max(0, vcm + (e * (v1 - v2) * m1) / (m1 + m2));
+    R.s -= penS / 2 + 0.05; F.s += penS / 2 + 0.05;
+  }
+  for (const P of [A, B]) withPlayer(g, P, () => { g.combo = 0; g.comboT = 0; damage(g, (2 + impact * 0.25) / P.V.armor, '互撞报废'); });
+  emit(g, 'bump', { impact });
+}
+
+function finishDuo(g, winner) {
+  if (g.over) return;
+  g.over = true;
+  syncBack(g);
+  const players = g.players.map((P) => ({
+    score: Math.round(P.score), coins: P.coinCount, vehicle: P.V.name, left: Math.max(0, Math.round(g.duoDist - P.s)),
+    stats: { ...P.stats, dist: Math.round(Math.min(P.s, g.duoDist)), bestCombo: P.best.combo, time: Math.round(g.t) },
+  }));
+  g.result = { duo: true, ok: true, reason: '冲过终点', players, winner, time: g.t, coins: 0 };
+  emit(g, 'over', { result: g.result, p: winner });
+}
+
+// 双人时传 P 拿那个玩家的；分数/连击/金币在 duo 下记在各自的 player 上(stepDuo 结束时已写回)
+export function hudInfo(g, P = g.player) {
+  const S = g.duo ? P : g;
   const L = g.road.nextLightAfter(P.s + P.l / 2);
   let light = null;
   if (L && L.stopS - P.s < 700) {
@@ -629,10 +747,10 @@ export function hudInfo(g) {
     light = { dist: Math.max(0, Math.round(L.stopS - P.s - P.l / 2)), state: st.main, remain: Math.ceil(st.remain) };
   }
   return {
-    kmh: Math.round(P.v * KMH), hp: P.hp / g.V.hp, score: Math.round(g.score), combo: g.combo, comboT: g.comboT,
+    kmh: Math.round(P.v * KMH), hp: P.hp / (P.V || g.V).hp, score: Math.round(S.score), combo: S.combo, comboT: S.comboT,
     dist: Math.round(P.s), light, signal: P.signal, lightsOn: P.lightsOn, timeLeft: g.timeLeft,
     exam: g.exam ? { points: g.exam.points, limit: g.lv.limit, dist: g.lv.dist } : null,
-    coins: g.coinCount, grip: g.grip,
+    coins: S.coinCount, grip: g.grip, out: P.out || 0, ghost: P.ghostT > 0,
   };
 }
 
@@ -644,11 +762,11 @@ function coinSpotOk(g, s, x) {
 }
 
 function updateCoins(g) {
-  const P = g.player;
   if (g.exam) return;
-  g.coins = g.coins.filter((c) => (c.taken ? g.t - c.takenT < 0.5 : c.s > P.s - 30));
-  while (g.coinAt < P.s + 430) {
-    const s0 = Math.max(g.coinAt, P.s + 260);
+  const lead = leadS(g);   // 双人：在跑在前面的人前方生成，落在后面那个人身后才收
+  g.coins = g.coins.filter((c) => (c.taken ? g.t - c.takenT < 0.5 : c.s > tailS(g) - 30));
+  while (g.coinAt < lead + 430) {
+    const s0 = Math.max(g.coinAt, lead + 260);
     const n = 5 + Math.floor(g.rand() * 4);
     let lane = Math.floor(g.rand() * LANES);
     const shift = g.rand() < 0.4 ? (lane === 0 ? 1 : lane === LANES - 1 ? -1 : g.rand() < 0.5 ? -1 : 1) : 0;
@@ -662,15 +780,18 @@ function updateCoins(g) {
     const [a, b] = g.mode === 'rampage' ? [140, 300] : g.map.coinGap;
     g.coinAt = s0 + n * 7 + a + g.rand() * (b - a);
   }
-  for (const c of g.coins) {
-    if (c.taken) continue;
-    if (Math.abs(c.s - P.s) < P.l / 2 + 0.8 && Math.abs(c.x - P.x) < P.w / 2 + 0.9) {
-      c.taken = true; c.takenT = g.t;
-      g.coinCount++; g.stats.coins++;
-      if (!g.exam) g.score += 50;
-      emit(g, 'coin', { id: c.id, n: g.coinCount });
+  for (const P of playersOf(g)) withPlayer(g, P, () => {
+    if (P.out > 0) return;
+    for (const c of g.coins) {
+      if (c.taken) continue;
+      if (Math.abs(c.s - P.s) < P.l / 2 + 0.8 && Math.abs(c.x - P.x) < P.w / 2 + 0.9) {
+        c.taken = true; c.takenT = g.t;
+        g.coinCount++; g.stats.coins++;
+        if (!g.exam) g.score += 50;
+        emit(g, 'coin', { id: c.id, n: g.coinCount });
+      }
     }
-  }
+  });
 }
 
 // ---------- 行人 ----------
@@ -690,12 +811,12 @@ function spawnWalker(g, s) {
 }
 
 function updatePeds(g, dt) {
-  const P = g.player;
   if (!g.map.peds || g.mode === 'rampage') return;
-  g.peds = g.peds.filter((p) => p.s > P.s - 120 && p.s < P.s + 520 && Math.abs(p.x) < 14 && (!p.hit || p.hit.t < 15));
-  if (g.peds.filter((p) => p.kind === 'walk').length < 16) spawnWalker(g, P.s + 300 + g.rand() * 180);
+  const PS = playersOf(g), lead = leadS(g);
+  g.peds = g.peds.filter((p) => PS.some((P) => p.s > P.s - 120 && p.s < P.s + 520) && Math.abs(p.x) < 14 && (!p.hit || p.hit.t < 15));
+  if (g.peds.filter((p) => p.kind === 'walk').length < 16) spawnWalker(g, lead + 300 + g.rand() * 180);
   // 红灯时走斑马线过马路
-  for (const L of g.road.lightsNear(P.s - 40, P.s + 380)) {
+  for (const L of lightsNearPlayers(g, 40, 380)) {
     const st = lightState(L, g.t);
     g.pedTimers[L.id] = (g.pedTimers[L.id] ?? 0) - dt;
     if (st.main === 'red' && st.remain > 7.5 && g.pedTimers[L.id] <= 0) {
@@ -705,7 +826,7 @@ function updatePeds(g, dt) {
     }
   }
   // 公路之王城市图：偶尔有人横穿马路
-  if (g.mode === 'king' && !g.mods.empty && P.s + 150 > g.jayAt) {
+  if (g.mode === 'king' && !g.mods.empty && lead + 150 > g.jayAt) {
     const dir = g.rand() < 0.5 ? 1 : -1;
     g.peds.push(makePed(g, 'jay', g.jayAt, -dir * 9.5, 0, dir * (1.7 + g.rand() * 0.6)));
     g.jayAt += 900 + g.rand() * 900;
@@ -726,7 +847,9 @@ function updatePeds(g, dt) {
       p.x += p.vx * dt;
       if (Math.abs(p.x) > 10.5) { p.kind = 'walk'; p.vx = 0; p.vs = (g.rand() < 0.5 ? -1 : 1) * 1.2; p.x = Math.sign(p.x) * (ROAD_HALF + 2); }
     }
-    if (Math.abs(p.s - P.s) < P.l / 2 + p.l / 2 && Math.abs(p.x - P.x) < P.w / 2 + p.w / 2 && P.v > 0.5) hitPed(g, p);
+    for (const P of PS) {
+      if (Math.abs(p.s - P.s) < P.l / 2 + p.l / 2 && Math.abs(p.x - P.x) < P.w / 2 + p.w / 2 && P.v > 0.5) { withPlayer(g, P, () => hitPed(g, p)); break; }
+    }
   }
 }
 

@@ -117,7 +117,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .logo { margin: 8px 0 0; font: clamp(52px, 11vw, 96px)/1 var(--title); letter-spacing: 4px; color: #fff; text-shadow: 0 5px 0 #d23c2c, 0 10px 0 #7d1c12, 0 18px 30px rgba(0, 0, 0, 0.5); transform: rotate(-3deg); }
 .logo span { font-size: 0.42em; margin-left: 8px; color: var(--gold); text-shadow: 0 3px 0 #7a4b00; vertical-align: top; }
 .slogan { margin: 4px 0 6px; color: var(--gold-2); letter-spacing: 3px; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8); }
-.modes { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.modes { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .mode-card { position: relative; text-align: left; padding: 16px; border-radius: 18px; background: var(--panel-2); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; transition: transform 0.12s, border-color 0.12s; min-height: 132px; }
 .mode-card:hover { transform: translateY(-3px); border-color: rgba(255, 201, 60, 0.6); }
 .mode-card:active { transform: scale(0.98); }
@@ -207,7 +207,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 
 /* 横屏矮屏 */
 @media (max-height: 520px) {
-  .modes { grid-template-columns: repeat(3, 1fr); }
+  .modes { grid-template-columns: repeat(4, 1fr); }
   .mode-card { min-height: 100px; padding: 12px; }
   .logo { font-size: 48px; }
   .slogan { display: none; }
@@ -359,3 +359,55 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .quick button { position: relative; padding: 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); font-size: 13px; font-weight: 700; }
 .quick .dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
 #setupDriver { font: 15px/1.2 var(--body); font-weight: 700; }
+
+/* ============ 双人对战 ============ */
+.mode-card.duo { background: linear-gradient(135deg, #1f4fb5, #7a3fd0); border-color: rgba(190, 200, 255, 0.5); }
+.mode-card.duo small { color: #e2e6ff; }
+.ptag { display: inline-block; padding: 1px 8px; border-radius: 8px; font: 800 13px/1.5 var(--body); color: #fff; vertical-align: 1px; }
+.ptag.p1 { background: #2f7bff; }
+.ptag.p2 { background: #ff3b4d; }
+.duo-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 6px; }
+.duo-cars { display: flex; flex-direction: column; gap: 6px; }
+.duo-car { text-align: left; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 2px solid transparent; display: flex; flex-direction: column; gap: 2px; }
+.duo-car b { font-size: 15px; }
+.duo-car small { color: var(--dim); font-size: 12px; }
+.duo-picks > div:first-child .duo-car.sel { border-color: #2f7bff; background: rgba(47, 123, 255, 0.16); }
+.duo-picks > div:last-child .duo-car.sel { border-color: #ff3b4d; background: rgba(255, 59, 77, 0.16); }
+#duoGo { margin-top: 14px; width: 100%; }
+
+#duoHud { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+#duoHud button { pointer-events: auto; }
+.duo-split { position: absolute; top: 0; bottom: 0; left: 50%; width: 4px; margin-left: -2px; background: #0b0f18; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18); }
+.duo-race { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: min(520px, 62vw); padding: 10px 26px 10px 16px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+.duo-track { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.15); }
+.duo-track .flag { position: absolute; right: -24px; top: -9px; font-style: normal; font-size: 18px; }
+.duo-track .dot { position: absolute; top: 50%; transform: translate(-50%, -50%); padding: 0 6px; border-radius: 7px; font-size: 11px; line-height: 17px; color: #fff; border: 2px solid #fff; }
+.duo-track .dot.p1 { background: #2f7bff; margin-top: -9px; }
+.duo-track .dot.p2 { background: #ff3b4d; margin-top: 9px; }
+#duoPause { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; }
+.duo-side { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); width: min(250px, 40vw); padding: 10px 14px 12px; border-radius: 16px; background: var(--panel); border: 2px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+.duo-side.p1 { left: 14px; border-color: rgba(47, 123, 255, 0.7); }
+.duo-side.p2 { right: 14px; border-color: rgba(255, 59, 77, 0.7); }
+.duo-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+.duo-spd { font: 40px/1 var(--title); }
+.duo-spd small { font: 13px var(--body); color: var(--dim); margin-left: 4px; }
+.duo-side .hp { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.duo-side .hp i { display: block; height: 100%; }
+.duo-meta { font-size: 13px; color: var(--dim); }
+.duo-meta b { color: var(--gold); font-size: 16px; }
+.duo-out { color: var(--red); font-weight: 800; }
+.duo-ghost { color: var(--blue); font-weight: 700; }
+.duo-toasts { position: absolute; top: 22%; left: 0; width: 50%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.duo-toasts.right { left: 50%; }
+#duoBig { position: absolute; top: 36%; left: 0; right: 0; text-align: center; font: 64px/1 var(--title); color: var(--gold); text-shadow: 0 4px 0 #7a4b00, 0 0 30px rgba(255, 180, 0, 0.6); opacity: 0; pointer-events: none; }
+#duoBig.show { animation: big 1.2s forwards; }
+#duoKeys { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); padding: 6px 14px; border-radius: 12px; background: var(--panel); font-size: 14px; white-space: nowrap; transition: opacity 1s; }
+#duoKeys.gone { opacity: 0; }
+.stats .duo-tab { grid-column: 1 / -1; width: 100%; border-collapse: collapse; font-size: 14px; }
+.duo-tab th, .duo-tab td { padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.duo-tab td:first-child { color: var(--dim); text-align: left; }
+.duo-tab .win { color: var(--gold); font-weight: 800; }
+@media (max-width: 620px) {
+  .duo-picks { grid-template-columns: 1fr; }
+  #duoKeys { display: none; }
+}
