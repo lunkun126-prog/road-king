@@ -46,8 +46,9 @@ export const DRIVERS = {
   kanga: { id: 'kanga', name: '袋袋',   face: '🦘', img: 'img/kangaroo_face.png', photo: 'img/kangaroo.png', color: '#ffb300', title: '胖胖袋鼠', perk: '起步 +10%，极速 +3%', cost: { coins: 800 }, tune: { accel: 1.1, maxV: 1.03 },
     bio: '从澳大利亚跳过来的胖袋鼠，圆滚滚的肚皮、一身亮黄色。别看它胖，后腿一蹬就蹿出去老远，红灯一变绿它总是第一个冲出去。开车时会把零食藏在育儿袋里。',
     traits: [['身高', '1.2 米'], ['体重', '保密（圆滚滚）'], ['爱好', '蹦跶、吃香蕉冰淇淋'], ['口头禅', '“蹦一下就到啦！”']] },
-  wang:  { id: 'wang',  name: '王师傅', face: '👨‍🦳', color: '#6fbf73', title: '二十年老司机', perk: '完好度 +30%，蹭车不心疼',   cost: { coins: 1200 }, tune: { hp: 1.3 },
-    bio: '开了二十年出租车，城里哪条路堵、哪条路快全在他脑子里。蹭一下？小场面。', traits: [['爱好', '泡茶、修车'], ['口头禅', '“小场面，稳住。”']] },
+  belial: { id: 'belial', name: '贝利亚', face: '🦹', img: 'img/belial_face.png', photo: 'img/belial.png', color: '#c0262f', title: '黑暗奥特曼', perk: '完好度 +30%，加速 +5%', cost: { coins: 1200 }, tune: { hp: 1.3, accel: 1.05 },
+    bio: '来自光之国的黑暗奥特曼，一身黑红色铠甲，胸口的彩色计时器闪着紫光，爪子又尖又长。力气超大、浑身硬邦邦，开车蹭一下根本不当回事；橙色的眼睛在后视镜里一亮，前面的车都会乖乖让道。',
+    traits: [['身高', '55 米（开车时缩小了）'], ['老家', 'M78 星云·光之国'], ['爱好', '飙车、比谁力气大'], ['口头禅', '“都给我让开！”']] },
   pang:  { id: 'pang',  name: '小胖',   face: '🧒', color: '#ffc93c', title: '金币收集家', perk: '结算金币 +30%',            cost: { gems: 30 },    tune: { coinMul: 1.3 },
     bio: '路上掉的金币一个都跑不掉，家里的存钱罐已经装满三个了。', traits: [['爱好', '数金币'], ['口头禅', '“又是一枚！”']] },
   fei:   { id: 'fei',   name: '阿飞',   face: '😎', color: '#39c5d8', title: '擦肩之王',   perk: '擦肩 / 连击得分 +25%',       cost: { gems: 50 },    tune: { comboMul: 1.25 },
@@ -58,8 +59,8 @@ export const DRIVERS = {
     bio: '驾校金牌教练，考场上的每一个坑都门儿清，教出的学员一次就过。', traits: [['爱好', '画倒车入库示意图'], ['口头禅', '“离合慢点松！”']] },
 };
 export const DEFAULT_DRIVER = 'dudu';   // 免费的第一位车手
-// 老存档：第一位「阿杰」换成了「豆豆」，第二位「小雪」换成了袋鼠「袋袋」，已有的直接换过来（不用再花钱）
-const RENAMED = { ajie: 'dudu', xue: 'kanga' };
+// 老存档：第一位「阿杰」→「豆豆」、第二位「小雪」→ 袋鼠「袋袋」、第三位「王师傅」→「贝利亚」，已有的直接换过来（不用再花钱）
+const RENAMED = { ajie: 'dudu', xue: 'kanga', wang: 'belial' };
 export function migrateDrivers(p) {
   if (p.drivers) p.drivers = [...new Set(p.drivers.map((id) => RENAMED[id] || id))];
   if (RENAMED[p.driver]) p.driver = RENAMED[p.driver];

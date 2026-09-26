@@ -69,9 +69,12 @@ test('车手：招募扣对应货币，加成生效', () => {
   assert.equal(g.timeLeft, 85);
 });
 
-test('车手：老存档里的阿杰换成豆豆、招募过的小雪换成袋鼠袋袋，加成跟着换', () => {
-  const p = M.migrateDrivers({ ...fresh(), drivers: ['ajie', 'xue'], driver: 'xue' });
-  assert.deepEqual(p.drivers, ['dudu', 'kanga']); assert.equal(p.driver, 'kanga');
+test('车手：老存档里的阿杰→豆豆、小雪→袋鼠袋袋、王师傅→贝利亚，加成跟着换', () => {
+  const p = M.migrateDrivers({ ...fresh(), drivers: ['ajie', 'xue', 'wang'], driver: 'xue' });
+  assert.deepEqual(p.drivers, ['dudu', 'kanga', 'belial']); assert.equal(p.driver, 'kanga');
+  assert.equal(M.migrateDrivers({ drivers: ['ajie', 'wang'], driver: 'wang' }).driver, 'belial', '王师傅换成贝利亚');
+  assert.equal(Object.keys(M.DRIVERS)[2], 'belial', '贝利亚是第三位');
+  assert.equal(M.tuneFor({ ...fresh(), driver: 'belial' }, 'sedan').hp, 1.3);
   assert.equal(M.migrateDrivers({ drivers: ['ajie'], driver: 'ajie' }).driver, 'dudu');
   assert.ok(M.DRIVERS.dudu.photo && M.DRIVERS.dudu.img && !M.DRIVERS.dudu.cost, '豆豆免费、有照片');
   assert.equal(M.tuneFor(p, 'sedan').accel, 1.1); assert.equal(M.tuneFor(p, 'sedan').maxV, 1.03);
