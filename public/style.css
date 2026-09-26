@@ -289,6 +289,52 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .driver .ref { color: #9fb0c6; font-size: 12px; }
 .driver small { color: var(--dim); font-size: 12px; min-height: 32px; }
 .driver .act { width: 100%; }
+.driver { cursor: pointer; }
+.driver .avatar img { width: 94%; height: 94%; object-fit: contain; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35)); }
+.driver .more { font-size: 11px; color: var(--gold-2); opacity: 0.75; }
+.face img { width: 24px; height: 24px; object-fit: contain; vertical-align: -6px; }
+.car-line .face img { width: 28px; height: 28px; vertical-align: -7px; }
+
+/* 车手详情：立体卡片（main.js 按指针位置设 --rx/--ry 倾斜、--gx/--gy 反光位置；整身照 translateZ 浮在卡面上方） */
+.dcard-wrap { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 72px 16px 16px; background: rgba(6, 10, 18, 0.62); backdrop-filter: blur(4px); perspective: 1100px; overflow-y: auto; }
+.dcard-wrap[hidden] { display: none; }
+.dcard { --rx: 0deg; --ry: 0deg; --gx: 50%; --gy: 30%; width: min(400px, 100%); border-radius: 24px; background: var(--panel-2); border: 1px solid var(--line); box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+  transform-style: preserve-3d; transform: rotateX(var(--rx)) rotateY(var(--ry)); transition: transform 0.08s linear; animation: dcIn 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+@keyframes dcIn { from { opacity: 0; transform: translateY(40px) scale(0.9) rotateX(20deg); } }
+.dcard-hero { position: relative; height: 230px; border-radius: 24px 24px 0 0; transform-style: preserve-3d;
+  background: radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.55) 0, transparent 55%), radial-gradient(circle at 50% 115%, rgba(0, 0, 0, 0.3), transparent 60%), var(--c); }
+.dcard-hero::before { content: ''; position: absolute; inset: 0; border-radius: inherit; background: repeating-radial-gradient(circle at 50% 120%, rgba(255, 255, 255, 0.09) 0 14px, transparent 14px 28px); }
+.dcard-photo { position: absolute; left: 50%; bottom: 18px; height: 122%; transform: translateX(-50%) translateZ(70px); filter: drop-shadow(0 18px 14px rgba(0, 0, 0, 0.35)); animation: dcBob 2.6s ease-in-out infinite; pointer-events: none; }
+.dcard-photo.emoji { height: auto; font-size: 150px; line-height: 1; }
+@keyframes dcBob { 50% { transform: translateX(-50%) translateZ(70px) translateY(-8px); } }
+.dcard-floor { position: absolute; left: 20%; bottom: 12px; width: 60%; height: 26px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, 0.4), transparent); transform: translateZ(20px); }
+.dcard-glare { position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(circle at var(--gx) var(--gy), rgba(255, 255, 255, 0.35), transparent 45%); mix-blend-mode: overlay; pointer-events: none; transform: translateZ(1px); }
+.dcard-body { padding: 14px 18px 18px; transform: translateZ(30px); }
+.dcard-name { display: flex; align-items: baseline; gap: 10px; }
+.dcard-name b { font: 34px/1 var(--title); color: var(--c); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4); }
+.dcard-name .ref { color: #9fb0c6; font-size: 13px; }
+.dcard-bio { margin: 10px 0 4px; line-height: 1.6; font-size: 14px; }
+.dstats { display: flex; flex-direction: column; gap: 6px; }
+.dstat { display: grid; grid-template-columns: 3em 1fr 3.4em; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+.dstat i { height: 10px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.dstat i b { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--c), var(--gold)); }
+.dstat em { font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+.dstat em.up { color: var(--green); font-weight: 700; }
+.dcard-perk { margin: 10px 0 6px; color: var(--gold); font-weight: 700; font-size: 14px; }
+.dtraits { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.dtraits span { padding: 7px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); font-size: 13px; }
+.dtraits small { display: block; color: var(--dim); font-size: 11px; }
+.dcard-act { display: flex; gap: 10px; margin-top: 14px; }
+.dcard-act .act, .dcard-act .btn { flex: 1; padding: 12px; }
+/* 横屏矮屏（笔记本）：左边照片、右边资料，一屏放得下 */
+@media (min-width: 700px) and (max-height: 860px) {
+  .dcard-wrap { padding: 48px 24px 24px; }
+  .dcard { width: min(780px, 100%); display: grid; grid-template-columns: 42% 1fr; }
+  .dcard-hero { height: auto; min-height: 380px; border-radius: 24px 0 0 24px; }
+  .dcard-photo { height: 88%; bottom: 8%; }
+  .dcard-body { align-self: center; }
+}
+@media (prefers-reduced-motion: reduce) { .dcard, .dcard-photo { animation: none; } }
 .parts { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .part { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); }
 .part em { font-style: normal; font-size: 30px; }

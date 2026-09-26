@@ -161,10 +161,10 @@ try:
         # 招募车手
         page.evaluate('window.__rk.profile().coins = 20000; window.__rk.profile().gems = 100')
         page.click('.menu-nav [data-go=drivers]')
-        page.click('#driverList [data-buy=xue]')
+        page.click('#driverList [data-buy=kanga]')
         page.wait_for_timeout(200)
         prof = page.evaluate('window.__rk.profile()')
-        check(prof['driver'] == 'xue' and prof['coins'] == 19200, f'招募小雪花 800 金币并出战 {prof["driver"]} {prof["coins"]}')
+        check(prof['driver'] == 'kanga' and prof['coins'] == 19200, f'招募袋鼠袋袋花 800 金币并出战 {prof["driver"]} {prof["coins"]}')
         page.screenshot(path=OUT / '11_drivers.png')
         page.click('#drivers .back')
         # 改装
@@ -184,7 +184,7 @@ try:
         page.evaluate('window.__rk.profile().vehicle = "sedan"; window.__rk.start("king")')
         page.wait_for_function('window.__rk.state === "play"')
         mv = page.evaluate('window.__rk.game.V.maxV * 3.6')
-        check(abs(mv - 220 * 1.03 * 1.06) < 0.5, f'开局极速含改装与车手加成 {mv:.1f}')
+        check(abs(mv - 220 * 1.03 * 1.03) < 0.5, f'开局极速含改装与车手加成 {mv:.1f}')
         page.keyboard.press('Escape')
         page.click('#pQuit')
         check(not errors, f'无 JS 报错 {errors[:3]}')

@@ -64,9 +64,16 @@ test('车手：招募扣对应货币，加成生效', () => {
   assert.equal(p.gems, 0); assert.equal(p.driver, 'pang');
   assert.equal(M.buyDriver(p, 'pang'), false, '不能重复买');
   assert.equal(M.tuneFor(p, 'sedan').coinMul, 1.3);
-  p.coins = 800; assert.ok(M.buyDriver(p, 'xue')); assert.equal(p.coins, 0);
+  p.coins = 800; assert.ok(M.buyDriver(p, 'kanga')); assert.equal(p.coins, 0);
   const g = createGame({ mode: 'rampage', tune: M.tuneFor({ ...p, driver: 'dayun' }, 'truck'), seed: 2 });
   assert.equal(g.timeLeft, 85);
+});
+
+test('车手：老存档里招募过的小雪换成袋鼠袋袋，加成跟着换', () => {
+  const p = M.migrateDrivers({ ...fresh(), drivers: ['ajie', 'xue'], driver: 'xue' });
+  assert.deepEqual(p.drivers, ['ajie', 'kanga']); assert.equal(p.driver, 'kanga');
+  assert.equal(M.tuneFor(p, 'sedan').accel, 1.1); assert.equal(M.tuneFor(p, 'sedan').maxV, 1.03);
+  assert.ok(M.DRIVERS.kanga.photo && M.DRIVERS.kanga.img && M.DRIVERS.kanga.bio);
 });
 
 test('每日任务：同一天固定 3 个，进度累计，完成才能领，全领完送奖励，跨天重置', () => {

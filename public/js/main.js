@@ -30,6 +30,7 @@ async function loadProfile() {
   if (!p) { try { p = JSON.parse(lsGet('rk_profile') || 'null'); } catch { p = null; } }
   const d = DEFAULT();
   profile = { ...d, ...(p || {}), name, settings: { ...d.settings, ...(p?.settings || {}) }, mods: { ...d.mods, ...(p?.mods || {}) }, best: { ...d.best, ...(p?.best || {}) } };
+  Meta.migrateDrivers(profile);
 }
 
 function saveProfile() {
@@ -287,7 +288,7 @@ function openSetup() {
   $('#weatherNote').textContent = WX_NOTE[profile.weather] || '';
   $('#setupCar').textContent = (VEHICLES[profile.vehicle] || VEHICLES.sedan).name;
   const D = Meta.DRIVERS[profile.driver] || Meta.DRIVERS.ajie;
-  $('#setupDriver').textContent = `${D.face} ${D.name} · ${D.perk}`;
+  $('#setupDriver').innerHTML = `<span class="face">${faceHTML(D)}</span> ${D.name} · ${D.perk}`;
   refreshMenu();
   fromSetup = false;
   show('setup');
@@ -345,7 +346,7 @@ function refreshMenu() {
   $('#nameText').textContent = profile.name;
   for (const el of $$('.coinText')) el.textContent = profile.coins;
   for (const el of $$('.gemText')) el.textContent = profile.gems || 0;
-  $('#driverFace').textContent = (Meta.DRIVERS[profile.driver] || Meta.DRIVERS.ajie).face;
+  $('#driverFace').innerHTML = faceHTML(Meta.DRIVERS[profile.driver] || Meta.DRIVERS.ajie);
   $('#navSign .dot').hidden = !Meta.canSign(profile);
   $('#navTasks .dot').hidden = !Meta.hasTodo(profile);
   $('#qSign .dot').hidden = !Meta.canSign(profile);
@@ -415,20 +416,76 @@ function renderTune(vid) {
 }
 
 // ---------- 车手 ----------
-function renderDrivers() {
-  const box = $('#driverList');
-  box.innerHTML = Object.values(Meta.DRIVERS).map((d) => {
-    const own = (profile.drivers || ['ajie']).includes(d.id), sel = profile.driver === d.id;
-    const btn = sel ? '<button class="act" disabled>出战中</button>' : own ? `<button class="act" data-pick="${d.id}">出战</button>`
-      : `<button class="act ${Meta.afford(profile, d.cost) ? 'buy' : 'cant'}" data-buy="${d.id}">${Meta.costText(d.cost)} 招募</button>`;
-    return `<div class="driver${sel ? ' sel' : ''}${own ? '' : ' locked'}"><div class="avatar" style="--c:${d.color}">${d.face}</div><b>${d.name}</b><span class="ref">${d.title}</span><small>${d.perk}</small>${btn}</div>`;
-  }).join('');
-  for (const b of box.querySelectorAll('[data-pick]')) b.onclick = () => { profile.driver = b.dataset.pick; sound.click(); saveProfile(); refreshMenu(); renderDrivers(); };
-  for (const b of box.querySelectorAll('[data-buy]')) b.onclick = () => {
+function faceHTML(d) { return d.img ? `<img src="${d.img}" alt="${d.name}">` : d.face; }   // 有头像图用图，没有用 emoji
+function driverBtn(d) {
+  const own = (profile.drivers || ['ajie']).includes(d.id), sel = profile.driver === d.id;
+  return sel ? '<button class="act" disabled>出战中</button>' : own ? `<button class="act" data-pick="${d.id}">出战</button>`
+    : `<button class="act ${Meta.afford(profile, d.cost) ? 'buy' : 'cant'}" data-buy="${d.id}">${Meta.costText(d.cost)} 招募</button>`;
+}
+function bindDriverBtns(root) {
+  for (const b of root.querySelectorAll('[data-pick]')) b.onclick = (e) => { e.stopPropagation(); profile.driver = b.dataset.pick; sound.click(); saveProfile(); refreshMenu(); renderDrivers(); };
+  for (const b of root.querySelectorAll('[data-buy]')) b.onclick = (e) => {
+    e.stopPropagation();
     if (Meta.buyDriver(profile, b.dataset.buy)) { sound.coin(); toast('招募了 ' + Meta.DRIVERS[b.dataset.buy].name, 'gold'); saveProfile(); refreshMenu(); renderDrivers(); }
     else toast('货币不够', 'red');
   };
 }
+function renderDrivers() {
+  const box = $('#driverList');
+  box.innerHTML = Object.values(Meta.DRIVERS).map((d) => {
+    const own = (profile.drivers || ['ajie']).includes(d.id), sel = profile.driver === d.id;
+    return `<div class="driver${sel ? ' sel' : ''}${own ? '' : ' locked'}" data-info="${d.id}"><div class="avatar" style="--c:${d.color}">${faceHTML(d)}</div><b>${d.name}</b><span class="ref">${d.title}</span><small>${d.perk}</small><span class="more">详情 ›</span>${driverBtn(d)}</div>`;
+  }).join('');
+  bindDriverBtns(box);
+  for (const c of box.querySelectorAll('[data-info]')) c.onclick = () => openDriverCard(c.dataset.info);
+  if (!$('#driverCard').hidden) openDriverCard($('#driverCard').dataset.id, true);   // 卡片开着(在卡片里招募/出战)就跟着刷新
+}
+
+// 车手详情：立体卡片。跟着鼠标/手指倾斜，没人碰时自己轻轻晃；整身照浮在卡面上方、头顶探出卡片
+let cardRaf = 0;
+function openDriverCard(id, refresh) {
+  const d = Meta.DRIVERS[id], wrap = $('#driverCard');
+  if (!d) return;
+  const t = d.tune || {};
+  const stats = [['极速', t.maxV], ['加速', t.accel], ['操控', t.steer], ['耐撞', t.hp], ['金币', t.coinMul]].map(([k, v = 1]) => {
+    const pct = Math.round(v * 100), w = Math.max(12, Math.min(100, 45 + (v - 1) * 300));
+    return `<div class="dstat"><span>${k}</span><i><b style="width:${w}%"></b></i><em class="${v > 1 ? 'up' : ''}">${pct}%</em></div>`;
+  }).join('');
+  wrap.dataset.id = id;
+  wrap.innerHTML = `<div class="dcard" style="--c:${d.color}">
+    <div class="dcard-hero">${d.photo ? `<img class="dcard-photo" src="${d.photo}" alt="${d.name}">` : `<div class="dcard-photo emoji">${d.face}</div>`}<div class="dcard-floor"></div><div class="dcard-glare"></div></div>
+    <div class="dcard-body">
+      <div class="dcard-name"><b>${d.name}</b><span class="ref">${d.title}</span></div>
+      <p class="dcard-bio">${d.bio || ''}</p>
+      <h3>属性</h3><div class="dstats">${stats}</div>
+      <p class="dcard-perk">特长：${d.perk}</p>
+      ${d.traits ? `<div class="dtraits">${d.traits.map(([k, v]) => `<span><small>${k}</small>${v}</span>`).join('')}</div>` : ''}
+      <div class="dcard-act"><button class="btn ghost" data-close>关闭</button>${driverBtn(d)}</div>
+    </div></div>`;
+  bindDriverBtns(wrap);
+  wrap.querySelector('[data-close]').onclick = closeDriverCard;
+  if (refresh) return;
+  sound.click();
+  wrap.hidden = false;
+  let touched = -1e9;
+  const tilt = (rx, ry, gx, gy) => {
+    const card = wrap.querySelector('.dcard');
+    card.style.setProperty('--rx', rx.toFixed(2) + 'deg'); card.style.setProperty('--ry', ry.toFixed(2) + 'deg');
+    card.style.setProperty('--gx', gx.toFixed(1) + '%'); card.style.setProperty('--gy', gy.toFixed(1) + '%');
+  };
+  wrap.onpointermove = (e) => {
+    const r = wrap.querySelector('.dcard').getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+    touched = performance.now(); tilt(-y * 18, x * 24, (x + 0.5) * 100, (y + 0.5) * 100);
+  };
+  const idle = (now) => {
+    if (wrap.hidden) return;
+    if (now - touched > 1500) tilt(Math.cos(now / 1400) * 4, Math.sin(now / 1100) * 12, 50 + Math.sin(now / 1100) * 35, 25);
+    cardRaf = requestAnimationFrame(idle);
+  };
+  cancelAnimationFrame(cardRaf); cardRaf = requestAnimationFrame(idle);
+  wrap.onclick = (e) => { if (e.target === wrap) closeDriverCard(); };
+}
+function closeDriverCard() { const wrap = $('#driverCard'); if (wrap.hidden) return; wrap.hidden = true; cancelAnimationFrame(cardRaf); sound.click(); }
 
 // ---------- 签到 ----------
 function renderSign() {
@@ -609,6 +666,7 @@ function frame(now) {
   lastT = now;
   const { inp, actions } = input.read(dt, profile.settings);
   for (const a of actions) {
+    if (a === 'Escape' && !$('#driverCard').hidden) { closeDriverCard(); continue; }
     if (a === 'Escape' || a === 'KeyP') state === 'play' ? pause() : state === 'pause' && resume();
     if (a === 'KeyC' && game) { cam = CAMS[(CAMS.indexOf(cam) + 1) % CAMS.length]; $('#dash').classList.toggle('fp', cam === 'fp'); toast(CAM_NAME[cam] + '（C 键切换）'); }
     if (a === 'KeyM') { const m = sound.toggleMute(); music.a.muted = m; toast(m ? '已静音' : '声音已开'); }
