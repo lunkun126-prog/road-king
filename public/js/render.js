@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ROAD_HALF, LANE_W, LANES, STEP, lightState, rng } from './road.js';
-import { cloneModel, hasModel, treeVariants } from './models.js';
+import { cloneModel, hasModel, treeVariants, setEnvMap, setVehicleEnvIntensity, envMaterial, instanceMaterial } from './models.js';
 
 // 车型 → 模型 id（没有对应 glb 时 buildVehicle 退回代码画的车）
 // 玩家的车：照片生成的真车模（tmp/refs/gen3d.py，Hunyuan3D 2.1）；原来的低面数模型留在 manifest 里给 NPC/兜底
@@ -244,8 +244,260 @@ function addRider(G, suit, y, z) {
   }
 }
 
+// ---------- 敞篷内饰 + 司机 ----------
+function stdMat(key, color, extra = {}, envK = 0.6) {
+  return mat(key, () => envMaterial(new THREE.MeshPhysicalMaterial({ color, roughness: 0.6, metalness: 0, ...extra }), envK));
+}
+
+// 两点之间的圆杆(前挡边框、手臂)：单位高圆柱，按两点摆放
+const _up = new THREE.Vector3(0, 1, 0), _dir = new THREE.Vector3();
+function placeRod(mesh, a, b) {
+  _dir.subVectors(b, a);
+  const len = _dir.length();
+  mesh.position.copy(a).addScaledVector(_dir, 0.5);
+  mesh.quaternion.setFromUnitVectors(_up, _dir.divideScalar(len || 1));
+  mesh.scale.set(1, len, 1);
+}
+function rod(group, a, b, r0, r1, m) {
+  const mesh = new THREE.Mesh(geo(`rod${r0}_${r1}`, () => new THREE.CylinderGeometry(r1, r0, 1, 12)), m);
+  placeRod(mesh, a, b);
+  group.add(mesh);
+  return mesh;
+}
+
+// 座椅布局(同一车型所有实例共用)
+const LAYOUT = new WeakMap();
+function cabinLayout(cab) {
+  if (LAYOUT.has(cab)) return LAYOUT.get(cab);
+  const X0 = cab.x0 + 0.09, X1 = cab.x1 - 0.09, cw = X1 - X0;
+  const dashD = Math.min(0.42, (cab.z1 - cab.z0) * 0.25);
+  const seatZ = Math.min(cab.z0 + dashD + 0.72, cab.z1 - 0.34); // 前排坐垫中心
+  const seatTop = cab.floorY + Math.min(0.34, (cab.cutY - cab.floorY) * 0.55);
+  const L = {
+    X0, X1, cw, dashD, seatZ, seatTop,
+    seatX: [X0 + cw * 0.27, X0 + cw * 0.73], // 左驾右副
+    seatW: Math.min(0.52, cw * 0.42),
+    rearZ: seatZ + 0.95,
+    wheel: new THREE.Vector3(X0 + cw * 0.27, cab.cutY + 0.07, cab.z0 + dashD + 0.1),
+  };
+  L.rear = L.rearZ + 0.32 < cab.z1;
+  // 座椅后面：先是 0.45m 折叠软顶，再往后(溜背车会空出一大块)铺车身同色盖板
+  L.back = (L.rear ? L.rearZ : L.seatZ) + 0.42;
+  L.stack = Math.min(0.45, cab.z1 - L.back);
+  L.deck = cab.z1 - (L.back + L.stack) > 0.1 ? [L.back + Math.max(0, L.stack), cab.z1] : null;
+  LAYOUT.set(cab, L);
+  return L;
+}
+
+// 内饰合成一个网格(顶点色)：地毯、仪表台、中控、前排桶椅、后排长椅、收起的软顶
+const CABIN_GEO = new WeakMap();
+function cabinGeometry(cab) {
+  if (CABIN_GEO.has(cab)) return CABIN_GEO.get(cab);
+  const L = cabinLayout(cab), parts = [];
+  const box = (w, h, d, x, y, z, color, rx = 0) => {
+    const g = new THREE.BoxGeometry(w, h, d);
+    if (rx) g.rotateX(rx);
+    parts.push(withColor(g.translate(x, y, z), color));
+  };
+  const midX = (L.X0 + L.X1) / 2, len = cab.z1 - cab.z0;
+  const leather = 0x6e4630, trim = 0x1c1d20;
+  box(L.cw, 0.04, len, midX, cab.floorY, (cab.z0 + cab.z1) / 2, 0x2b2c2f);                       // 地毯
+  box(L.cw + 0.1, 0.2, L.dashD, midX, cab.cutY - 0.03, cab.z0 + L.dashD / 2, trim);               // 仪表台
+  box(0.2, L.seatTop - cab.floorY, 0.9, midX, (L.seatTop + cab.floorY) / 2, L.seatZ - 0.2, trim); // 中控
+  for (const sx of L.seatX) {
+    box(L.seatW * 0.85, L.seatTop - cab.floorY - 0.1, 0.45, sx, (L.seatTop - 0.1 + cab.floorY) / 2, L.seatZ, trim);
+    box(L.seatW, 0.12, 0.5, sx, L.seatTop - 0.06, L.seatZ, leather);                                 // 坐垫
+    box(L.seatW, 0.5, 0.13, sx, L.seatTop + 0.24, L.seatZ + 0.3, leather, 0.18);                     // 靠背(后仰；不做头枕，免得从车后挡住司机)
+  }
+  if (L.rear) {
+    box(L.cw * 0.94, 0.12, 0.5, midX, L.seatTop - 0.08, L.rearZ, leather);
+    box(L.cw * 0.94, 0.55, 0.13, midX, L.seatTop + 0.24, L.rearZ + 0.3, leather, 0.15);
+  }
+  if (L.stack > 0.12) box(L.cw + 0.1, 0.13, L.stack, midX, cab.cutY - 0.02, L.back + L.stack / 2, 0x151517); // 折叠起来的软顶
+  const g = mergeGeometries(parts.map((p) => p.toNonIndexed()));
+  CABIN_GEO.set(cab, g);
+  return g;
+}
+
+const DECK_GEO = new WeakMap();
+
+// 方向盘：pivot(倾斜 25°，上沿朝司机) → spin(随转向绕轴转)
+function addSteeringWheel(G, L) {
+  const m = stdMat('swheel', 0x141518, { roughness: 0.45 });
+  const pivot = new THREE.Group();
+  pivot.position.copy(L.wheel);
+  pivot.rotation.x = 0.45;
+  const spin = new THREE.Group();
+  spin.add(new THREE.Mesh(geo('swRing', () => new THREE.TorusGeometry(0.17, 0.022, 10, 28)), m));
+  const hub = new THREE.Mesh(geo('swHub', () => new THREE.CylinderGeometry(0.05, 0.05, 0.04, 16).rotateX(Math.PI / 2)), m);
+  spin.add(hub);
+  for (const a of [0, Math.PI, -Math.PI / 2]) {
+    const s = new THREE.Mesh(geo('swSpoke', () => new THREE.BoxGeometry(0.15, 0.022, 0.018).translate(0.075, 0, 0)), m);
+    s.rotation.z = a; spin.add(s);
+  }
+  pivot.add(spin);
+  G.add(pivot);
+  return { pivot, spin };
+}
+
+// 握点：方向盘 9 点 / 3 点，转向角 turn 时的车内坐标
+function gripPos(L, side, turn, out) {
+  const a = 0.45, R = 0.17;
+  const x = side * R * Math.cos(turn), y = side * R * Math.sin(turn);
+  return out.set(L.wheel.x + x, L.wheel.y + y * Math.cos(a), L.wheel.z + y * Math.sin(a));
+}
+
+// 小黄人：软胶质感的梨形身体 + 绿圈大眼 + 鼻梁鼓包 + 细线微笑；坐姿，只做腰以上会露出来的部分
+const BUDDY_PROFILE = [[0, 0], [0.22, 0.005], [0.33, 0.04], [0.4, 0.12], [0.42, 0.24], [0.41, 0.34], [0.39, 0.44],
+  [0.355, 0.53], [0.315, 0.61], [0.29, 0.68], [0.28, 0.75], [0.27, 0.82], [0.25, 0.88], [0.205, 0.94], [0.13, 0.985], [0, 1]];
+function buddyRadius(y) {
+  const P = BUDDY_PROFILE;
+  for (let i = 1; i < P.length; i++) if (y <= P[i][1]) {
+    const t = (y - P[i - 1][1]) / (P[i][1] - P[i - 1][1]);
+    return P[i - 1][0] + (P[i][0] - P[i - 1][0]) * t;
+  }
+  return 0;
+}
+const BUDDY_DEPTH = 0.92; // 前后略扁
+
+function buildBuddy() {
+  const B = new THREE.Group();
+  // 天光偏蓝，底色要比照片更暖一点，渲染出来才是奶黄色
+  const skin = stdMat('buddySkin', 0xf0d664, { roughness: 0.62, sheen: 0.3, sheenColor: new THREE.Color(0xffe7a0), sheenRoughness: 0.8, clearcoat: 0.1, clearcoatRoughness: 0.6 }, 0.45);
+  const body = new THREE.Mesh(geo('buddyBody', () => {
+    const curve = new THREE.CatmullRomCurve3(BUDDY_PROFILE.map(([r, y]) => new THREE.Vector3(r, y, 0)));
+    const pts = curve.getPoints(60).map((p) => new THREE.Vector2(Math.max(0, p.x), p.y));
+    return new THREE.LatheGeometry(pts, 56).scale(1, 1, BUDDY_DEPTH);
+  }), skin);
+  B.add(body);
+  // 脸朝 -z：θ 从正前方算起，表面点 = (r·sinθ, y, -r·cosθ·depth)
+  const onSurface = (theta, y, out = 0) => {
+    const r = buddyRadius(y) + out;
+    return new THREE.Vector3(r * Math.sin(theta), y, -r * Math.cos(theta) * BUDDY_DEPTH);
+  };
+  const normalAt = (theta) => new THREE.Vector3(Math.sin(theta), 0.12, -Math.cos(theta)).normalize();
+  const ringOuter = stdMat('buddyEyeRim', 0xa9c187, { roughness: 0.5 }, 0.6);
+  const ring = stdMat('buddyEye', 0xc9dca6, { roughness: 0.45, clearcoat: 0.3 }, 0.7);
+  const pupil = stdMat('buddyPupil', 0x0b0b0b, { roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.02 }, 1.4);
+  const sph = geo('sph', () => new THREE.SphereGeometry(1, 24, 16));
+  for (const side of [-1, 1]) {
+    const th = side * 0.6, y = 0.79, n = normalAt(th);
+    const c = onSurface(th, y, -0.012);
+    const add = (m, sx, sz, push) => {
+      const e = new THREE.Mesh(sph, m);
+      e.position.copy(c).addScaledVector(n, push);
+      e.scale.set(sx, sx, sz);
+      e.lookAt(e.position.clone().add(n));
+      B.add(e);
+    };
+    add(ringOuter, 0.088, 0.026, 0);
+    add(ring, 0.077, 0.03, 0.004);
+    add(pupil, 0.037, 0.02, 0.026);
+  }
+  // 鼻梁鼓包
+  const snout = new THREE.Mesh(sph, skin);
+  snout.position.copy(onSurface(0, 0.72, -0.045));
+  snout.scale.set(0.075, 0.1, 0.06);
+  B.add(snout);
+  // 嘴：贴着脸的一道细线，两端微微上翘
+  const mouth = new THREE.Mesh(geo('buddyMouth', () => {
+    const pts = [];
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16 * 2 - 1, th = t * 0.42, y = 0.635 + 0.012 * t * t;
+      pts.push(onSurface(th, y, 0.003));
+    }
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.0045, 6);
+  }), stdMat('buddyMouth', 0x4d3d2a, { roughness: 0.7 }, 0.3));
+  B.add(mouth);
+  B.userData.skin = skin;
+  B.userData.shoulder = (side) => new THREE.Vector3(side * 0.3, 0.56, -0.03);
+  B.userData.arm = [0.075, 0.055]; // 肩部/手腕粗细(身高比例)
+  return B;
+}
+
+// 内饰 + 方向盘 + 司机(双手握方向盘)；返回 steer(turn) 用来每帧转方向盘、带动手臂
+function addCabin(G, cab, driver) {
+  const L = cabinLayout(cab);
+  G.add(new THREE.Mesh(cabinGeometry(cab), stdMat('cabin', 0xffffff, { vertexColors: true, roughness: 0.7 }, 0.35)));
+  if (cab.frame) {
+    const fm = stdMat('wsFrame', 0x1a1c1f, { metalness: 0.6, roughness: 0.3 }, 1);
+    const { tl, tr, bl, br } = cab.frame;
+    rod(G, tl, tr, 0.022, 0.022, fm);
+    if (bl) rod(G, bl, tl, 0.024, 0.02, fm);
+    if (br) rod(G, br, tr, 0.024, 0.02, fm);
+  }
+  if (L.deck) {
+    // 车身同色盖板：用切顶时认出的车漆材质(带涂装色)；贴图车认不出就用深色
+    let paint = null;
+    if (cab.paint) G.traverse((o) => { if (!paint && o.isMesh && !Array.isArray(o.material) && o.material.name === cab.paint) paint = o.material; });
+    const [d0, d1] = L.deck;
+    if (!DECK_GEO.has(cab)) DECK_GEO.set(cab, new THREE.BoxGeometry(L.cw + 0.12, 0.05, d1 - d0).translate((L.X0 + L.X1) / 2, cab.cutY - 0.03, (d0 + d1) / 2));
+    G.add(new THREE.Mesh(DECK_GEO.get(cab), paint || stdMat('deckDark', 0x151517, { roughness: 0.8 }, 0.3)));
+  }
+  const wheel = addSteeringWheel(G, L);
+  if (!driver) return null;
+  const D = buildBuddy();
+  // 小黄人按车高缩放：头顶高出窗沿 0.64m 左右，腰以上露在外面
+  const k = cab.cutY + 0.64 - L.seatTop;
+  D.scale.setScalar(k);
+  D.position.set(L.seatX[0], L.seatTop - 0.02, L.seatZ - 0.06);
+  G.add(D);
+  const [r0, r1] = D.userData.arm;
+  const skinMat = D.userData.skin;
+  const sph = geo('sph', () => new THREE.SphereGeometry(1, 24, 16));
+  const arms = [-1, 1].map((side) => {
+    const arm = new THREE.Mesh(geo(`rod${r0 * k}_${r1 * k}`, () => new THREE.CylinderGeometry(r1 * k, r0 * k, 1, 14)), skinMat);
+    const hand = new THREE.Mesh(sph, skinMat);
+    hand.scale.setScalar(0.06 * k);
+    G.add(arm, hand);
+    return { side, arm, hand, shoulder: D.userData.shoulder(side).multiplyScalar(k).add(D.position) };
+  });
+  const grip = new THREE.Vector3();
+  const steer = (turn) => {
+    wheel.spin.rotation.z = -turn;
+    for (const a of arms) {
+      gripPos(L, a.side, -turn, grip);
+      a.hand.position.copy(grip);
+      placeRod(a.arm, a.shoulder, grip);
+    }
+  };
+  steer(0);
+  return { steer, driver: D };
+}
+
+// 真实车模的灯：让模型自带的尾灯/大灯材质本身发光(每辆车一份，刹车各亮各的)；
+// 转向灯用叠加混合的小块贴在尾灯/大灯外侧——不亮时完全透明，只有打灯时才看得见
+function useModelLamps(G, model, parts) {
+  const L = model.userData.lamps || {};
+  const glow = (names, emissive, key) => {
+    let m = null;
+    if (names?.length) model.traverse((o) => {
+      if (!o.isMesh || Array.isArray(o.material) || !names.includes(o.material.name)) return;
+      m ||= Object.assign(instanceMaterial(o.material), { emissive: new THREE.Color(emissive) });
+      o.material = m;
+    });
+    parts[key] = m || new THREE.MeshLambertMaterial({ emissive }); // 认不出灯的模型：给个不上场的材质，逻辑照常设亮度
+  };
+  glow(L.tail, 0xff2020, 'tail');
+  glow(L.head, 0xfff4c0, 'head');
+  const bl = new THREE.MeshLambertMaterial({ color: 0x000000, emissive: 0xffa000, emissiveIntensity: 0, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+  const br = bl.clone();
+  parts.blinkL = bl; parts.blinkR = br;
+  const b = model.userData.box;
+  const g = geo('blinker', () => new THREE.BoxGeometry(0.12, 0.1, 0.05));
+  for (const [lamp, z] of [[L.tailBox, b.max.z], [L.headBox, b.min.z]]) {
+    for (const sx of [-1, 1]) {
+      const m = new THREE.Mesh(g, sx < 0 ? bl : br);
+      if (lamp) m.position.set(sx < 0 ? lamp.min.x + 0.06 : lamp.max.x - 0.06, (lamp.min.y + lamp.max.y) / 2, z < 0 ? lamp.min.z - 0.01 : lamp.max.z + 0.01);
+      else m.position.set(sx * ((b.max.x - b.min.x) / 2 - 0.3), b.min.y + (b.max.y - b.min.y) * 0.38, z + Math.sign(z) * 0.01);
+      G.add(m);
+    }
+  }
+}
+
 // 返回 {group, body, tail, blinkL, blinkR, head}；modelId 有对应 glb 时用真实模型
-export function buildVehicle(kind, color, modelId, riderSuit) {
+// opts.driver：true = 敞篷车驾驶座上坐一只小黄人
+export function buildVehicle(kind, color, modelId, riderSuit, opts = {}) {
   const G = new THREE.Group();
   const body = lambert(color);
   const glass = mat('glass', () => lambert(0x1b2633));
@@ -271,6 +523,12 @@ export function buildVehicle(kind, color, modelId, riderSuit) {
       addBox(G, blinkR, 0.06, 0.06, 0.04, 0.14, lampY, b.max.z + 0.01);
       return parts;
     }
+    if (model.userData.cabin) {
+      const c = addCabin(G, model.userData.cabin, opts.driver);
+      if (c) parts.steer = c.steer;
+    }
+    useModelLamps(G, model, parts);
+    return parts;
   } else if (kind === 'car' || kind === 'sedan' || kind === 'sport') {
     const low = kind === 'sport';
     w = low ? 1.95 : 1.85; l = low ? 4.5 : 4.4;
@@ -391,11 +649,36 @@ function buildCones(len) {
   return { group: G, cones, sign };
 }
 
+// 车漆/玻璃反光用的户外环境：天空渐变 + 地面 + 一颗很亮的太阳，预滤波成 PMREM
+function skyEnvMap(renderer) {
+  const s = new THREE.Scene();
+  const R = 50, g = new THREE.SphereGeometry(R, 48, 24);
+  const top = new THREE.Color(0x7fb8ea), hor = new THREE.Color(0xf4f7fa), gnd = new THREE.Color(0x55584f);
+  const p = g.attributes.position, col = [], c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i) / R;
+    if (y >= 0) c.copy(hor).lerp(top, Math.pow(y, 0.55));
+    else c.copy(hor).lerp(gnd, Math.min(1, -y * 5));
+    col.push(c.r, c.g, c.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  s.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(3.5, 16, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.97, 0.9).multiplyScalar(12) }));
+  sun.position.set(28, 36, 18);
+  s.add(sun);
+  const pm = new THREE.PMREMGenerator(renderer);
+  const tex = pm.fromScene(s, 0.015).texture;
+  pm.dispose();
+  return tex;
+}
+
 // ---------- 世界 ----------
 export class World {
   constructor(canvas) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+    setEnvMap(skyEnvMap(this.renderer)); // 须在 loadModels 之前：车材质建好时就挂上
+    this.envK = -1;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(70, 1, 0.1, 1200);
     this.scene.fog = new THREE.Fog(0x9fd3f0, 60, 420);
@@ -489,7 +772,8 @@ export class World {
     if (this.player) this.scene.remove(this.player.group);
     const id = game.V.id;
     const vk = PLAYER_KIND[id] || 'sport';
-    this.player = buildVehicle(vk, { sedan: 0x1b2352, truck: 0xd8342c }[id] ?? 0xffc400, PLAYER_MODEL[id], RIDER_SUIT[id]);
+    this.player = buildVehicle(vk, { sedan: 0xf4f4f0, truck: 0xd8342c }[id] ?? 0xffc400, PLAYER_MODEL[id], RIDER_SUIT[id], { driver: true });
+    this.steerVis = 0;
     this.scene.add(this.player.group);
     const pb = new THREE.Box3().setFromObject(this.player.group);   // 量车顶高、车头位置，给引擎盖/车内视角定位
     this.player.top = pb.max.y; this.player.front = -pb.min.z;
@@ -762,7 +1046,7 @@ export class World {
     const key = c.kind === 'cones' ? null : c.kind + ':' + (mid || '') + (mid ? ':' + c.color : '');
     if (c.kind === 'cones') o = buildCones(c.l);
     else if (this.pool[key]?.length) { o = this.pool[key].pop(); o.body.color.setHex(c.color); }
-    else o = buildVehicle(c.kind, c.color, mid, c.kind === 'moto' ? 0x333a44 + (c.id % 5) * 0x221100 : null);
+    else o = buildVehicle(c.kind, c.color, mid, c.kind === 'moto' ? 0x333a44 + (c.id % 5) * 0x221100 : null, { driver: true });
     o.kind = key;
     this.scene.add(o.group);
     this.cars.set(c.id, o);
@@ -846,6 +1130,9 @@ export class World {
       fog = p > 0.62 && p < 0.72 ? 0.5 : 0;
     }
     this.night = night;
+    // 夜里车漆别再反射白天的天空；变化超过一点才重设，免得每帧遍历材质
+    const envK = Math.round((1 - 0.85 * night - 0.2 * fog) * 50) / 50;
+    if (envK !== this.envK) { this.envK = envK; setVehicleEnvIntensity(envK); }
     const day = new THREE.Color(0x9fd3f0), nightC = new THREE.Color(0x0c1426), duskC = new THREE.Color(0xf09a62), fogC = new THREE.Color(0xc4cad0);
     const sky = day.clone().lerp(nightC, night).lerp(duskC, dusk * 0.6);
     if (fog) sky.lerp(night > 0.5 ? new THREE.Color(0x2a2f38) : fogC, fog);
@@ -901,6 +1188,11 @@ export class World {
     const pg = this.player.group;
     pg.position.set(_p.x, _p.y, _p.z);
     pg.rotation.set(0, -_p.h - lean, g.V.rider ? -P.steer * 0.35 : 0);
+    if (this.player.steer) {
+      // 方向盘(和握着它的手)跟着转向走，平滑一下免得抖
+      this.steerVis += (P.steer * 1.9 - this.steerVis) * Math.min(1, dt * 10);
+      this.player.steer(this.steerVis);
+    }
     const blinkOn = Math.floor(g.t * 2.6) % 2 === 0;
     this.player.blinkL.emissiveIntensity = blinkOn && P.signal === 'L' ? 2.5 : 0;
     this.player.blinkR.emissiveIntensity = blinkOn && P.signal === 'R' ? 2.5 : 0;

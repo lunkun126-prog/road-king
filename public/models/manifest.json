@@ -1,5 +1,5 @@
 {
- "_note": "车头朝 -z；len=目标车长(米)，height=目标高度；rotY 为模型自身需要绕 y 轴转的角度；tint=可换色的材质名(正则)；hue=贴图色相旋转",
+ "_note": "车头朝 -z；len=目标车长(米)，height=目标高度；rotY 为模型自身需要绕 y 轴转的角度；tint=可换色的材质名(正则)；hue=贴图色相旋转；convertible=敞篷(沿窗沿切掉车顶，自动找侧窗玻璃最低点)；glass=额外算作玻璃的材质名(正则)；cut=没有独立玻璃材质时手动给窗沿高度(车高比例)；cutAdj=窗沿微调(米)；ws=前挡留多高(米，默认0.4)",
  "sedan": {
   "file": "car_sedan.glb",
   "len": 4.5,
@@ -7,7 +7,8 @@
   "tint": "^Blue$",
   "author": "Quaternius",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/59a67a6c-490e-472e-bae6-5a4d2541f1c7"
+  "source": "https://poly.pizza/m/59a67a6c-490e-472e-bae6-5a4d2541f1c7",
+  "convertible": true
  },
  "quadri": {
   "file": "car_quadri.glb",
@@ -15,7 +16,8 @@
   "rotY": 180,
   "author": "ReppenThe303",
   "license": "CC-BY 3.0",
-  "source": "https://poly.pizza/m/61b05999-8b17-4af1-a70c-8725e822f1e5"
+  "source": "https://poly.pizza/m/61b05999-8b17-4af1-a70c-8725e822f1e5",
+  "convertible": true
  },
  "stoccarda": {
   "file": "car_stoccarda.glb",
@@ -23,7 +25,10 @@
   "rotY": 270,
   "author": "Chris Tarello",
   "license": "CC-BY 3.0",
-  "source": "https://poly.pizza/m/79e131da-1624-4ec1-b655-86ab3d9b166d"
+  "source": "https://poly.pizza/m/79e131da-1624-4ec1-b655-86ab3d9b166d",
+  "convertible": true,
+  "glass": "^mat17$",
+  "cut": 0.6
  },
  "sport": {
   "file": "car_cavallo.glb",
@@ -31,7 +36,8 @@
   "rotY": 180,
   "author": "PuKkBuMXDD",
   "license": "CC-BY 3.0",
-  "source": "https://poly.pizza/m/95b46627-afff-4b11-95a8-c19e903c01e3"
+  "source": "https://poly.pizza/m/95b46627-afff-4b11-95a8-c19e903c01e3",
+  "convertible": true
  },
  "woking": {
   "file": "car_woking.glb",
@@ -39,7 +45,10 @@
   "rotY": 0,
   "author": "Nick Ladd",
   "license": "CC-BY 3.0",
-  "source": "https://poly.pizza/m/31c953b7-83c1-4b89-8a6b-08615e0a6567"
+  "source": "https://poly.pizza/m/31c953b7-83c1-4b89-8a6b-08615e0a6567",
+  "convertible": true,
+  "glass": "^mat17$",
+  "cut": 0.6
  },
  "toro": {
   "file": "toro_v12.glb",
@@ -47,7 +56,9 @@
   "rotY": 180,
   "author": "Ignition Labs",
   "license": "CC-BY 3.0",
-  "source": "https://poly.pizza/m/f8c6bcd5-92a2-4f88-b821-64935a00216f"
+  "source": "https://poly.pizza/m/f8c6bcd5-92a2-4f88-b821-64935a00216f",
+  "convertible": true,
+  "cut": 0.66
  },
  "moto_r1": {
   "file": "moto_sport.glb",
@@ -74,7 +85,8 @@
   "tint": "^LightBlue$",
   "author": "Quaternius",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/d35173c8-6078-4367-8f87-b1f2599f0bb7"
+  "source": "https://poly.pizza/m/d35173c8-6078-4367-8f87-b1f2599f0bb7",
+  "convertible": true
  },
  "npc_car2": {
   "file": "car_sedan.glb",
@@ -83,7 +95,8 @@
   "tint": "^Blue$",
   "author": "Quaternius",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/59a67a6c-490e-472e-bae6-5a4d2541f1c7"
+  "source": "https://poly.pizza/m/59a67a6c-490e-472e-bae6-5a4d2541f1c7",
+  "convertible": true
  },
  "npc_sport1": {
   "file": "npc_sport1.glb",
@@ -92,7 +105,8 @@
   "tint": "^White$",
   "author": "Quaternius",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/34db1344-31cc-49ac-bc46-c055f68e39ca"
+  "source": "https://poly.pizza/m/34db1344-31cc-49ac-bc46-c055f68e39ca",
+  "convertible": true
  },
  "npc_sport2": {
   "file": "npc_sport2.glb",
@@ -101,15 +115,18 @@
   "tint": "^Orange$",
   "author": "Quaternius",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/e6410e19-a88f-4158-bc91-c19fccf85028"
+  "source": "https://poly.pizza/m/e6410e19-a88f-4158-bc91-c19fccf85028",
+  "convertible": true
  },
  "npc_hatch": {
   "file": "npc_hatch.glb",
-  "len": 4.0,
+  "len": 4,
   "rotY": 180,
   "author": "Kay Lousberg",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/7dc33135-12c6-4de4-b5f9-cf445fd35994"
+  "source": "https://poly.pizza/m/7dc33135-12c6-4de4-b5f9-cf445fd35994",
+  "convertible": true,
+  "cut": 0.62
  },
  "npc_wagon": {
   "file": "npc_wagon.glb",
@@ -117,7 +134,9 @@
   "rotY": 180,
   "author": "Kay Lousberg",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/840253f1-676f-4d91-bd5c-9c6e3647ba73"
+  "source": "https://poly.pizza/m/840253f1-676f-4d91-bd5c-9c6e3647ba73",
+  "convertible": true,
+  "cut": 0.6
  },
  "npc_police": {
   "file": "npc_police.glb",
@@ -125,7 +144,8 @@
   "rotY": 180,
   "author": "Quaternius",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/179e43ce-b9e0-40cf-8b99-641693d3207e"
+  "source": "https://poly.pizza/m/179e43ce-b9e0-40cf-8b99-641693d3207e",
+  "convertible": true
  },
  "npc_suv": {
   "file": "npc_suv.glb",
@@ -134,7 +154,8 @@
   "tint": "^White$",
   "author": "Quaternius",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/e5fbf2ee-5c9e-47d5-8ab6-80cacd463baa"
+  "source": "https://poly.pizza/m/e5fbf2ee-5c9e-47d5-8ab6-80cacd463baa",
+  "convertible": true
  },
  "npc_pickup": {
   "file": "npc_pickup.glb",
@@ -142,7 +163,9 @@
   "rotY": 180,
   "author": "Quaternius",
   "license": "CC0 1.0",
-  "source": "https://poly.pizza/m/4e925a01-dbb8-4aab-848b-221306b835ea"
+  "source": "https://poly.pizza/m/4e925a01-dbb8-4aab-848b-221306b835ea",
+  "convertible": true,
+  "cut": 0.62
  },
  "npc_truck": {
   "file": "npc_truck.glb",
