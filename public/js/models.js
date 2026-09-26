@@ -102,8 +102,9 @@ function vehicleMaterial(src, m) {
     // 轮胎、黑色塑料件：哑光
     Object.assign(p, { metalness: 0, roughness: 0.78 });
     p.userData.envK = 0.5;
-  } else if (src.metalness > 0.6 && lum(src.color) > 0.3) {
-    Object.assign(p, { metalness: 0.9, roughness: 0.22 }); // 镀铬
+  } else if (!src.map && src.metalness > 0.6 && lum(src.color) > 0.3) {
+    // 镀铬；贴图车(Hunyuan3D 生成的整车一张贴图)的 metallicFactor 常是 1，不能整车当镀铬，否则贴图被压成一片黑
+    Object.assign(p, { metalness: 0.9, roughness: 0.22 });
   } else {
     // 车漆：底色 + 一层清漆高光
     Object.assign(p, { metalness: src.map ? 0.1 : 0.35, roughness: src.map ? 0.5 : 0.38, clearcoat: src.map ? 0.5 : 1, clearcoatRoughness: 0.06 });
@@ -318,6 +319,8 @@ function prepare(gltf, m) {
   src.traverse((o) => {
     if (!o.isMesh) return;
     o.frustumCulled = !o.isSkinnedMesh;
+    // Hunyuan3D 生成的模型不带法线；换成新材质后没有法线整车光照为 0(全黑)，这里补平滑法线
+    if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
     const one = (mt) => {
       const x = vehicle ? vehicleMaterial(mt, m) : fixMaterial(mt.clone());
       if (m.hue && x.map) x.map = hueTexture(x.map, m.hue);
