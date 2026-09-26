@@ -201,5 +201,77 @@
   "author": "Quaternius",
   "license": "CC0 1.0",
   "source": "https://poly.pizza/m/457b2397-4bfb-41c4-862d-82d1592b2a5f"
+ },
+ "real_sedan": {
+  "file": "gen/sedan.glb",
+  "len": 5.0,
+  "rotY": 180,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_sedan.*"
+ },
+ "real_quadri": {
+  "file": "gen/quadri.glb",
+  "len": 4.6,
+  "rotY": 180,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_quadri.*"
+ },
+ "real_stoccarda": {
+  "file": "gen/stoccarda.glb",
+  "len": 4.55,
+  "rotY": 180,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_stoccarda.*"
+ },
+ "real_sport": {
+  "file": "gen/sport.glb",
+  "len": 4.6,
+  "rotY": 180,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_sport.*"
+ },
+ "real_woking": {
+  "file": "gen/woking.glb",
+  "len": 4.55,
+  "rotY": 180,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_woking.*"
+ },
+ "real_toro": {
+  "file": "gen/toro.glb",
+  "len": 4.8,
+  "rotY": 180,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_toro.*"
+ },
+ "real_moto_r1": {
+  "file": "gen/moto.glb",
+  "len": 2.1,
+  "rotY": 90,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_moto.*"
+ },
+ "real_moto_zx": {
+  "file": "gen/moto_zx.glb",
+  "len": 2.1,
+  "rotY": 90,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_moto_zx.*"
+ },
+ "real_truck": {
+  "file": "gen/truck.glb",
+  "len": 8.0,
+  "rotY": 180,
+  "author": "Hunyuan3D 2.1 本机照片生成（仅本机自玩，不公开）",
+  "license": "本机自用",
+  "source": "tmp/refs/ref_truck.*"
  }
 }

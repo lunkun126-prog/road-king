@@ -5,7 +5,8 @@ import { ROAD_HALF, LANE_W, LANES, STEP, lightState, rng } from './road.js';
 import { cloneModel, hasModel, treeVariants } from './models.js';
 
 // 车型 → 模型 id（没有对应 glb 时 buildVehicle 退回代码画的车）
-const PLAYER_MODEL = { sedan: 'sedan', quadri: 'quadri', stoccarda: 'stoccarda', sport: 'sport', woking: 'woking', toro: 'toro', moto: 'moto_r1', ninja: 'moto_zx' };
+// 玩家的车：照片生成的真车模（tmp/refs/gen3d.py，Hunyuan3D 2.1）；原来的低面数模型留在 manifest 里给 NPC/兜底
+const PLAYER_MODEL = { sedan: 'real_sedan', quadri: 'real_quadri', stoccarda: 'real_stoccarda', sport: 'real_sport', woking: 'real_woking', toro: 'real_toro', moto: 'real_moto_r1', ninja: 'real_moto_zx', truck: 'real_truck' };
 const PLAYER_KIND = { truck: 'playertruck', moto: 'moto', ninja: 'moto', sedan: 'sedan' };
 const RIDER_SUIT = { moto: 0x1e4fd6, ninja: 0x2fa84f };
 const NPC_MODELS = { car: ['npc_car1', 'npc_car2', 'npc_sport1', 'npc_sport2', 'npc_hatch', 'npc_wagon', 'npc_car1', 'npc_police'], van: ['npc_suv', 'npc_pickup'], bus: ['npc_bus'], truck: ['npc_truck'], moto: ['npc_moto'] };
@@ -30,19 +31,24 @@ function canvasTex(w, h, draw, repeat = true) {
   return t;
 }
 
-function roadTexture(plain) {
-  return canvasTex(512, 512, (g, w, h) => {
-    g.fillStyle = '#3b3e44'; g.fillRect(0, 0, w, h);
-    const r = rng(7);
-    for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '0,0,0'},${0.03 + r() * 0.05})`; g.fillRect(r() * w, r() * h, 2, 2); }
+function roadTexture(plain, photo) {
+  return canvasTex(photo ? 1024 : 512, photo ? 1024 : 512, (g, w, h) => {
+    if (photo) {   // 真实沥青照片（CC0）铺 3×3，再压暗一点当路面底色
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) g.drawImage(photo, (i * w) / 3, (j * h) / 3, w / 3, h / 3);
+      g.fillStyle = 'rgba(30,32,36,0.55)'; g.fillRect(0, 0, w, h);
+    } else {
+      g.fillStyle = '#3b3e44'; g.fillRect(0, 0, w, h);
+      const r = rng(7);
+      for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '0,0,0'},${0.03 + r() * 0.05})`; g.fillRect(r() * w, r() * h, 2, 2); }
+    }
     if (plain) return;
     const px = (lat) => ((lat + RW) / (2 * RW)) * w;
     g.fillStyle = '#e9e9e2';
     const edge = (LANES * LANE_W) / 2;
-    for (const lat of [-edge, edge]) g.fillRect(px(lat) - 4, 0, 8, h);
+    for (const lat of [-edge, edge]) g.fillRect(px(lat) - 4 * (w / 512), 0, 8 * (w / 512), h);
     for (let i = 1; i < LANES; i++) {
       const lat = -edge + i * LANE_W;
-      g.fillRect(px(lat) - 3, 0, 6, h * 0.4); // 虚线：10 米一周期，画 4 米
+      g.fillRect(px(lat) - 3 * (w / 512), 0, 6 * (w / 512), h * 0.4); // 虚线：10 米一周期，画 4 米
     }
   });
 }
@@ -318,12 +324,14 @@ export function buildVehicle(kind, color, modelId, riderSuit) {
     return parts;
   }
   // 灯组：车尾 +z，车头 -z
+  // 真实车模自带灯的样子，这里的灯块往里收、做小，只在刹车/打灯时亮起来，别悬在车身外面
+  const inset = parts.model ? 0.14 : 0, side = parts.model ? 0.5 : 0.3, sz = parts.model ? 0.7 : 1;
   for (const sx of [-1, 1]) {
-    addBox(G, tail, 0.36, 0.16, 0.05, sx * (w / 2 - 0.3), lampY, l / 2 + 0.01);
-    addBox(G, head, 0.36, 0.16, 0.05, sx * (w / 2 - 0.3), lampY, -l / 2 - 0.01);
+    addBox(G, tail, 0.36 * sz, 0.16 * sz, 0.05, sx * (w / 2 - side), lampY, l / 2 + 0.01 - inset);
+    addBox(G, head, 0.36 * sz, 0.16 * sz, 0.05, sx * (w / 2 - side), lampY, -l / 2 - 0.01 + inset);
     const bm = sx < 0 ? blinkL : blinkR;
-    addBox(G, bm, 0.14, 0.14, 0.06, sx * (w / 2 - 0.05), lampY, l / 2 + 0.02);
-    addBox(G, bm, 0.14, 0.14, 0.06, sx * (w / 2 - 0.05), lampY, -l / 2 - 0.02);
+    addBox(G, bm, 0.14 * sz, 0.14 * sz, 0.06, sx * (w / 2 - 0.05 - inset * 2), lampY, l / 2 + 0.02 - inset);
+    addBox(G, bm, 0.14 * sz, 0.14 * sz, 0.06, sx * (w / 2 - 0.05 - inset * 2), lampY, -l / 2 - 0.02 + inset);
   }
   return parts;
 }
@@ -404,6 +412,7 @@ export class World {
       ground: lambert(0xffffff, { vertexColors: true }),
       rail: lambert(0xb9c0c8, { side: THREE.DoubleSide }),
       bld: new THREE.MeshLambertMaterial({ map: this.tex.win, vertexColors: true, emissive: 0xffffff, emissiveMap: this.tex.winE, emissiveIntensity: 0 }),
+      tower: new THREE.MeshLambertMaterial({ map: this.tex.win, vertexColors: true, emissive: 0xffffff, emissiveMap: this.tex.winE, emissiveIntensity: 0 }),
       tree: lambert(0xffffff, { vertexColors: true, flatShading: true }),
       water: new THREE.MeshLambertMaterial({ color: 0x2c7fb8, emissive: 0x0b3a5c, emissiveIntensity: 0.35, vertexColors: true }),
       pole: lambert(0x6b737c),
@@ -411,6 +420,7 @@ export class World {
       paint: lambert(0xf2f2ea, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       finish: lambert(0xffffff, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, map: canvasTex(64, 64, (g) => { for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { g.fillStyle = (i + j) % 2 ? '#111' : '#fff'; g.fillRect(i * 8, j * 8, 8, 8); } }) }),
     };
+    this.loadPhotoTextures();
     this.chunks = new Map();
     this.cars = new Map();
     this.pool = {};
@@ -434,6 +444,41 @@ export class World {
     this.camera.updateProjectionMatrix();
   }
 
+  // 真实照片贴图（ambientCG CC0，public/textures/）：沥青路面、砖墙窗户（低楼）、玻璃幕墙（高楼）。加载失败就留着代码画的
+  loadPhotoTextures() {
+    const L = new THREE.TextureLoader();
+    const ok = (t) => { t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
+    const set = (mat, key, t) => { mat[key] = t; mat.needsUpdate = true; };
+    L.load('textures/asphalt.jpg', (t) => {
+      set(this.m.road, 'map', roadTexture(false, t.image)); set(this.m.plain, 'map', roadTexture(true, t.image));
+    });
+    L.load('textures/facade_brick.jpg', (t) => set(this.m.bld, 'map', ok(t)));
+    L.load('textures/facade_brick_night.jpg', (t) => { const e = ok(t); e.colorSpace = THREE.SRGBColorSpace; set(this.m.bld, 'emissiveMap', e); });
+    L.load('textures/facade_glass.jpg', (t) => set(this.m.tower, 'map', ok(t)));
+  }
+
+  // 车内视角：相机前面挂一个 3D 驾驶舱（车头、仪表台、A 柱、后视镜），跟着相机走；车身模型此时隐藏，免得相机钻进模型里
+  buildCockpit(id, rider) {
+    if (this.cockpit) { this.camera.remove(this.cockpit); this.cockpit = null; }
+    if (rider) return;
+    const paint = { sedan: 0x1b2352, quadri: 0xb3121c, stoccarda: 0xf2f2f2, sport: 0xd4231c, woking: 0xff7a00, toro: 0x2a8fe0, truck: 0xd8342c }[id] ?? 0xcccccc;
+    const G = new THREE.Group();
+    const body = new THREE.MeshLambertMaterial({ color: paint }), dark = new THREE.MeshLambertMaterial({ color: 0x1c1f24 });
+    const box = (m, w, h, d, x, y, z, rx = 0, rz = 0) => {
+      const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.rotation.set(rx, 0, rz); G.add(o); return o;
+    };
+    box(body, 2.2, 0.08, 1.9, 0, -0.62, -1.9, -0.12);            // 引擎盖（往前微微下斜）
+    box(dark, 2.4, 0.34, 0.5, 0, -0.5, -0.75);                   // 仪表台
+    box(dark, 0.09, 1.3, 0.09, -0.92, 0.0, -0.95, 0.35, -0.28);  // 左 A 柱
+    box(dark, 0.09, 1.3, 0.09, 0.92, 0.0, -0.95, 0.35, 0.28);    // 右 A 柱
+    box(dark, 2.2, 0.1, 0.35, 0, 0.55, -0.9);                    // 车顶前沿
+    box(dark, 0.34, 0.1, 0.04, 0, 0.44, -0.8);                   // 后视镜
+    G.visible = false;
+    this.camera.add(G);
+    if (!this.camera.parent) this.scene.add(this.camera);
+    this.cockpit = G;
+  }
+
   reset(game) {
     for (const [, c] of this.chunks) this.disposeChunk(c);
     this.chunks.clear();
@@ -444,8 +489,11 @@ export class World {
     if (this.player) this.scene.remove(this.player.group);
     const id = game.V.id;
     const vk = PLAYER_KIND[id] || 'sport';
-    this.player = buildVehicle(vk, { sedan: 0xf4f4f0, truck: 0xd8342c }[id] ?? 0xffc400, PLAYER_MODEL[id], RIDER_SUIT[id]);
+    this.player = buildVehicle(vk, { sedan: 0x1b2352, truck: 0xd8342c }[id] ?? 0xffc400, PLAYER_MODEL[id], RIDER_SUIT[id]);
     this.scene.add(this.player.group);
+    const pb = new THREE.Box3().setFromObject(this.player.group);   // 量车顶高、车头位置，给引擎盖/车内视角定位
+    this.player.top = pb.max.y; this.player.front = -pb.min.z;
+    this.buildCockpit(id, !!game.V.rider);
     this.game = game;
     this.camInit = false;
     this.finishMesh = null;
@@ -629,7 +677,7 @@ export class World {
     }
 
     // 楼房 / 树 / 路灯
-    const blds = [], trees = [], poles = [], lamps = [];
+    const blds = [], towers = [], trees = [], poles = [], lamps = [];
     const bldP = sc === 'city' ? 0.8 : sc === 'highway' ? 0.12 : 0;
     const variants = snow ? [] : treeVariants();
     const inst = new Map(); // variant -> [Matrix4]
@@ -657,9 +705,10 @@ export class World {
           else if (r() < bldP) {
             // x=横向进深 bd，z=沿路长度 bw
             const bh = sc === 'city' ? 12 + r() * r() * 70 : 6 + r() * 10, bd = 10 + r() * 12;
-            const gb = withColor(boxUV(bd, bh, bw).translate(0, bh / 2 - 1, 0), new THREE.Color().setHSL([0.08, 0.1, 0.55, 0.58, 0.5, 0.02, 0.62][Math.floor(r() * 7)] + r() * 0.03, 0.18 + r() * 0.3, 0.5 + r() * 0.25));
+            // 贴的是真实外墙照片，只轻轻染一点色，免得把砖墙/玻璃染花
+            const gb = withColor(boxUV(bd, bh, bw).translate(0, bh / 2 - 1, 0), new THREE.Color().setHSL([0.08, 0.1, 0.55, 0.58, 0.5, 0.02, 0.62][Math.floor(r() * 7)] + r() * 0.03, 0.06 + r() * 0.12, 0.8 + r() * 0.15));
             const d = (sc === 'city' ? 12 + r() * 10 : 30 + r() * 40) + bd / 2;
-            blds.push(placed(gb, road, s + bw / 2, sg * (RW + d), groundAt(s + bw / 2, sg, d)));
+            (bh > 34 ? towers : blds).push(placed(gb, road, s + bw / 2, sg * (RW + d), groundAt(s + bw / 2, sg, d)));
           } else addTrees(s + bw / 2, sg, sc === 'city' ? 5.5 : 5, sc === 'city' ? 11 : 45, sc === 'city' ? 3 : 4);
         }
         s += bw + 4 + r() * 8;
@@ -675,6 +724,7 @@ export class World {
       }
     }
     if (blds.length) G.add(new THREE.Mesh(mergeGeometries(blds), this.m.bld));
+    if (towers.length) G.add(new THREE.Mesh(mergeGeometries(towers), this.m.tower));
     if (trees.length) G.add(new THREE.Mesh(mergeGeometries(trees), this.m.tree));
     for (const [v, mats] of inst) for (const part of v.parts) {
       const im = new THREE.InstancedMesh(part.geometry, part.material, mats.length);
@@ -807,6 +857,7 @@ export class World {
     this.sun.intensity = 1.3 * (1 - night) + 0.05;
     this.sun.color.set(dusk > 0.3 ? 0xffc49a : 0xffffff);
     this.m.bld.emissiveIntensity = night * 1.1;
+    this.m.tower.emissiveIntensity = night * 1.1;
     this.m.lamp.emissiveIntensity = night * 2;
     const wx = g.weather.id;
     if (wx !== 'clear') {
@@ -849,7 +900,7 @@ export class World {
     road.toWorld(P.s, P.x, _p);
     const pg = this.player.group;
     pg.position.set(_p.x, _p.y, _p.z);
-    pg.rotation.set(0, -_p.h - lean, g.V.id === 'moto' ? -P.steer * 0.35 : 0);
+    pg.rotation.set(0, -_p.h - lean, g.V.rider ? -P.steer * 0.35 : 0);
     const blinkOn = Math.floor(g.t * 2.6) % 2 === 0;
     this.player.blinkL.emissiveIntensity = blinkOn && P.signal === 'L' ? 2.5 : 0;
     this.player.blinkR.emissiveIntensity = blinkOn && P.signal === 'R' ? 2.5 : 0;
@@ -865,26 +916,34 @@ export class World {
     this.sun.target.position.set(_p.x, _p.y, _p.z);
 
     // 相机
+    // 视角：tp 追车 / near 近追 / hood 引擎盖 / fp 车内。车身一直显示（车内看得到车头），只有摩托车内视角藏骑手
     const mode = view.cam || this.camMode;
-    const fp = mode === 'fp';
+    const fp = mode === 'fp', rigid = fp || mode === 'hood';
     pg.visible = !fp;
-    const eye = { sedan: 1.2, sport: 1.0, moto: 1.75, truck: 2.7 }[g.V.id];
+    if (this.cockpit) this.cockpit.visible = fp;
+    const eye = g.V.rider ? 1.75 : ({ sedan: 1.2, quadri: 1.15, stoccarda: 1.0, sport: 1.0, woking: 0.95, toro: 0.95, truck: 2.7 }[g.V.id] ?? 1.2);
     const pos = new THREE.Vector3(), look = new THREE.Vector3();
-    if (fp) {
-      road.toWorld(P.s - g.V.l * 0.05, P.x - (g.V.id === 'moto' ? 0 : 0.35), _q);
-      pos.set(_q.x, _q.y + eye, _q.z);
-      road.toWorld(P.s + 30, P.x - 0.35 + P.xv * 1.6, _q);
-      look.set(_q.x, _q.y + eye * 0.85, _q.z);
+    if (rigid) {
+      // 车内：驾驶位眼高；引擎盖：车顶前沿再高一点往前看（车头在画面下方）
+      const top = this.player.top || eye + 0.3, front = this.player.front || g.V.l / 2;
+      const fwd = fp ? (g.V.id === 'truck' ? front - 1.2 : -g.V.l * 0.08) : front - Math.min(2.2, g.V.l * 0.5);
+      const side = fp && !g.V.rider ? 0.35 : 0;
+      const up = fp ? eye : top + 0.35;
+      road.toWorld(P.s + fwd, P.x - side, _q);
+      pos.set(_q.x, _q.y + up, _q.z);
+      road.toWorld(P.s + 30, P.x - side + P.xv * 1.6, _q);
+      look.set(_q.x, _q.y + up * 0.72, _q.z);
     } else {
-      const back = g.V.id === 'truck' ? 15 : 8;
-      road.toWorld(P.s - back, P.x * 0.85, _q);
-      pos.set(_q.x, Math.max(_q.y, _p.y) + (g.V.id === 'truck' ? 5.5 : 3.1), _q.z);
-      road.toWorld(P.s + 14, P.x, _q);
-      look.set(_q.x, _q.y + 1.2, _q.z);
+      const big = g.V.id === 'truck' ? 1.8 : 1;
+      const [back, h, ahead, lookY] = mode === 'near' ? [5.0, 1.9, 6, 0.2] : [7.4, 2.9, 6, -0.2];   // 看点压低：车落在画面中上部，不被底部仪表挡
+      road.toWorld(P.s - back * big, P.x * 0.85, _q);
+      pos.set(_q.x, Math.max(_q.y, _p.y) + h * big, _q.z);
+      road.toWorld(P.s + ahead * big, P.x, _q);
+      look.set(_q.x, _q.y + lookY * big, _q.z);
     }
     if (!this.camInit || view.snap) { this.camPos.copy(pos); this.camLook.copy(look); this.camInit = true; }
-    const k = fp ? 1 : 1 - Math.pow(0.0005, dt);
-    this.camPos.lerp(pos, k); this.camLook.lerp(look, fp ? 1 : 1 - Math.pow(0.0001, dt));
+    const k = rigid ? 1 : 1 - Math.pow(0.0005, dt);
+    this.camPos.lerp(pos, k); this.camLook.lerp(look, rigid ? 1 : 1 - Math.pow(0.0001, dt));
     this.camera.position.copy(this.camPos);
     if (this.shake > 0) {
       this.camera.position.x += (Math.random() - 0.5) * this.shake * 0.5;

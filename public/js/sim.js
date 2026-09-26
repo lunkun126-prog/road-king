@@ -57,10 +57,12 @@ export const MODE_INFO = {
 
 const PALETTE = [0xd94c4c, 0x3d6fd9, 0xe8e8e8, 0x2b2b2b, 0xf0c33c, 0x3fa66b, 0x8a5cc7, 0xe07a2f, 0x9aa5b1, 0x5ac8d8];
 
-export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods = {}, seed = Date.now() & 0xffffff, map = 'city', weather = 'clear' } = {}) {
+export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods = {}, seed = Date.now() & 0xffffff, map = 'city', weather = 'clear', tune = null } = {}) {
   const lv = mode === 'exam' ? EXAM_LEVELS[level - 1] : null;
   const vid = mode === 'rampage' ? 'truck' : VEHICLES[vehicle] ? vehicle : 'sedan';
-  const V = VEHICLES[vid];
+  const T = { maxV: 1, accel: 1, steer: 1, hp: 1, coinMul: 1, comboMul: 1, rampageTime: 0, examCoinMul: 1, ...(tune || {}) };
+  const B = VEHICLES[vid];   // 车手 / 改装加成：复制一份车参数再乘
+  const V = { ...B, maxV: B.maxV * T.maxV, accel: B.accel * T.accel, steer: B.steer * T.steer, hp: B.hp * T.hp };
   const M = MAPS[mode === 'king' ? map : 'city'] || MAPS.city;
   const W = WEATHERS[lv ? lv.weather || 'clear' : weather] || WEATHERS.clear;
   let roadOpts;
@@ -68,7 +70,7 @@ export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods =
   else if (mode === 'rampage') roadOpts = { curves: true, curveMax: 1 / 200, lights: null };
   else roadOpts = { curves: true, curveMax: M.curveMax, hillAmp: M.hillAmp, lights: M.lights };
   const g = {
-    mode, level, lv, V, mods, seed, map: M, weather: W, grip: W.grip,
+    mode, level, lv, V, tune: T, mods, seed, map: M, weather: W, grip: W.grip,
     coins: [], coinAt: 120, coinCount: 0, peds: [], pedTimers: {}, jayAt: 700,
     road: new Road(seed, roadOpts),
     rand: rng(seed ^ 0x5bd1e995),
@@ -80,7 +82,7 @@ export function createGame({ mode = 'king', level = 1, vehicle = 'sedan', mods =
     score: 0, combo: 0, comboT: 0, best: { combo: 0 },
     stats: { nearMiss: 0, overtake: 0, smash: 0, crash: 0, redRun: 0, maxKmh: 0, dist: 0, coins: 0, pedHit: 0 },
     exam: lv ? { points: 100, flags: {}, log: [], failed: null } : null,
-    timeLeft: mode === 'rampage' ? 75 : lv?.time ?? 0,
+    timeLeft: mode === 'rampage' ? 75 + T.rampageTime : lv?.time ?? 0,
   };
   if (mode !== 'rampage') g.player.v = 0; else g.player.v = 60 / KMH;
   fillTraffic(g);
@@ -383,13 +385,14 @@ function finish(g, ok, reason) {
   if (E) {
     const pass = ok && E.points >= 90;
     stars = pass ? (E.points >= 100 ? 3 : E.points >= 95 ? 2 : 1) : 0;
-    coins = pass ? 100 + stars * 60 : 10;
+    coins = pass ? Math.round((100 + stars * 60) * g.tune.examCoinMul) : 10;
     g.result = { ok: pass, reason: pass ? '考试合格' : reason || `得分 ${E.points} 不足 90`, points: E.points, stars, coins, log: E.log };
   } else {
     coins = Math.floor(g.score / 40);
     g.result = { ok, reason, score: Math.round(g.score), coins };
   }
   g.result.coins += g.coinCount * 5;
+  if (!E) g.result.coins = Math.round(g.result.coins * g.tune.coinMul);
   g.result.coinPickup = g.coinCount;
   if (g.mods && Object.values(g.mods).some(Boolean)) g.result.modded = true;
   g.result.stats = { ...g.stats, dist: Math.round(g.player.s), bestCombo: g.best.combo, time: Math.round(g.t) };
@@ -407,7 +410,7 @@ function addCombo(g, pts, label) {
   g.combo = g.comboT > 0 ? Math.min(10, g.combo + 1) : 1;
   g.comboT = g.mode === 'rampage' ? 3 : 4;
   g.best.combo = Math.max(g.best.combo, g.combo);
-  const gain = pts * g.combo;
+  const gain = Math.round(pts * g.combo * g.tune.comboMul);
   if (!g.exam) g.score += gain;
   emit(g, 'combo', { text: `${label} ×${g.combo}  +${gain}`, combo: g.combo });
 }

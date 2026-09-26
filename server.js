@@ -13,7 +13,7 @@ const PORT = Number(process.env.PORT || 8321);
 const HOST = process.env.HOST || '127.0.0.1';
 const MODES = new Set(['king', 'rampage', 'exam']);
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.flac': 'audio/flac' };
 
 function loadDb() {
   try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { return { profiles: {}, boards: {} }; }
@@ -55,6 +55,11 @@ function serveFile(res, base, rel) {
 async function api(req, res, url) {
   const parts = url.pathname.split('/').filter(Boolean); // ['api', kind, key]
   const [, kind, key] = parts.map(decodeURIComponent);
+  if (kind === 'music' && req.method === 'GET') {   // 开车音乐：列 public/music 里的音频文件
+    let files = [];
+    try { files = fs.readdirSync(path.join(PUBLIC, 'music')).filter((f) => /\.(mp3|ogg|m4a|wav|flac)$/i.test(f)).sort((a, z) => a.localeCompare(z, 'zh')); } catch { /* 没有目录就空 */ }
+    return send(res, 200, files);
+  }
   if (kind === 'profile') {
     const name = cleanName(key);
     if (!name) return send(res, 400, { error: '名字不能为空' });

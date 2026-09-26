@@ -37,7 +37,7 @@
 
   <div id="toasts"></div>
   <div id="bigText"></div>
-  <div id="keyhint">W/S 油门刹车 · A/D 转向 · Q/E 转向灯 · H 喇叭 · L 大灯 · C 切视角 · Esc 暂停</div>
+  <div id="keyhint">W/S 油门刹车 · A/D 转向 · Q/E 转向灯 · H 喇叭 · L 大灯 · C 切视角 · N 换歌 · Esc 暂停</div>
 
   <div id="dash" class="dash">
     <div class="minibtns">
@@ -75,8 +75,8 @@
 <section id="menu" class="screen">
   <div class="menu-inner">
     <div class="topbar">
-      <button id="nameChip" class="chip">👤 <span id="nameText">车手</span></button>
-      <div class="chip coins">🪙 <span class="coinText">0</span></div>
+      <button id="nameChip" class="chip"><span id="driverFace" class="face">🧑</span> <span id="nameText">车手</span></button>
+      <div class="wallet"><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></div>
     </div>
     <h1 class="logo">公路之王<span>Plus</span></h1>
     <p class="slogan">道路千万条，安全第一条</p>
@@ -86,7 +86,11 @@
       <button class="mode-card" data-mode="rampage"><em>🚛</em><b>大运狂飙</b><small>开重卡 75 秒 · 创飞一切</small><span id="bestRampage" class="best"></span></button>
     </div>
     <nav class="menu-nav">
+      <button data-go="signin" id="navSign">📅<span>签到</span><i class="dot" hidden></i></button>
+      <button data-go="tasks" id="navTasks">📋<span>任务</span><i class="dot" hidden></i></button>
+      <button data-go="drivers">🧑‍✈️<span>车手</span></button>
       <button data-go="garage">🚗<span>车库</span></button>
+      <button data-go="music">🎵<span>音乐</span></button>
       <button data-go="board">🏆<span>排行榜</span></button>
       <button data-go="settings">⚙️<span>设置</span></button>
       <button data-go="help">❓<span>玩法</span></button>
@@ -96,12 +100,21 @@
 
 <section id="setup" class="screen dim" hidden>
   <div class="card setup">
+    <div class="setup-top">
+      <div class="wallet"><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></div>
+      <div class="quick">
+        <button data-quick="signin" id="qSign">📅 签到<i class="dot" hidden></i></button>
+        <button data-quick="tasks" id="qTasks">📋 任务<i class="dot" hidden></i></button>
+        <button data-quick="music">🎵 音乐</button>
+      </div>
+    </div>
     <small>公路之王 · 出发前</small>
     <h2>选路线</h2>
     <div id="mapList" class="maps"></div>
     <div class="seg wx" id="setupWeather"><button data-v="clear">☀️ 晴天</button><button data-v="rain">🌧️ 雨天</button><button data-v="snow">❄️ 下雪</button></div>
     <p class="note" id="weatherNote"></p>
-    <div class="car-line"><span>座驾</span><b id="setupCar"></b><button id="setupGarage" class="btn ghost">换车</button></div>
+    <div class="car-line"><span>车手</span><b id="setupDriver"></b><button id="setupDrivers" class="btn ghost">换人</button></div>
+    <div class="car-line"><span>座驾</span><b id="setupCar"></b><button id="setupGarage" class="btn ghost">换车</button><button id="setupTune" class="btn ghost">🔧 改装</button></div>
     <button id="setupGo" class="btn primary">出发</button>
     <button id="setupBack" class="btn ghost">返回</button>
   </div>
@@ -116,9 +129,9 @@
 
 <section id="garage" class="screen" hidden>
   <div class="sheet">
-    <header><button class="back">‹</button><h2>车库</h2><div class="chip coins">🪙 <span class="coinText">0</span></div></header>
+    <header><button class="back">‹</button><h2>车库</h2><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></header>
     <div id="carList" class="cars"></div>
-    <p class="note">金币靠开车赚、路上捡，没有广告。车型都是「致敬款」：外形参考真车，名字是虚构的。「大运狂飙」固定开大运重卡。</p>
+    <p class="note">金币靠开车赚、路上捡，钻石靠签到、每日任务、驾考三星、破纪录，没有广告。已拥有的车点「🔧 改装」升级极速 / 加速 / 操控 / 耐撞。车型都是「致敬款」：外形参考真车，名字是虚构的。「大运狂飙」固定开大运重卡。</p>
   </div>
 </section>
 
@@ -136,12 +149,59 @@
     <label class="row">车手名<input id="setName" maxlength="16"></label>
     <div class="row">触屏转向<div class="seg" id="setControl"><button data-v="wheel">方向盘</button><button data-v="buttons">左右键</button></div></div>
     <label class="row">转向灵敏度 <span id="sensVal"></span><input id="setSens" type="range" min="0.6" max="1.6" step="0.05"></label>
-    <div class="row">默认视角<div class="seg" id="setCam"><button data-v="fp">第一人称</button><button data-v="tp">第三人称</button></div></div>
+    <div class="row">默认视角<div class="seg" id="setCam"><button data-v="tp">追车</button><button data-v="near">近追</button><button data-v="hood">引擎盖</button><button data-v="fp">车内</button></div></div>
     <label class="row">音量<input id="setVol" type="range" min="0" max="1" step="0.05"></label>
     <h3>🔧 MOD 工具箱 <small>开了就不上榜</small></h3>
     <label class="row check"><input type="checkbox" data-mod="invincible"> 无敌：撞谁谁飞，不掉血</label>
     <label class="row check"><input type="checkbox" data-mod="speed"> 狂飙：极速 ×3.6</label>
     <label class="row check"><input type="checkbox" data-mod="empty"> 空旷道路：没有车流</label>
+  </div>
+</section>
+
+<section id="music" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>🎵 开车音乐</h2></header>
+    <label class="row check"><input type="checkbox" id="setMusicOn"> 开车时放音乐（开局自动放，N 键换下一首）</label>
+    <label class="row">音乐音量<input id="setMusicVol" type="range" min="0" max="1" step="0.05"></label>
+    <h3>选歌 <small id="musicPicked"></small></h3>
+    <ul id="musicList" class="songs"></ul>
+    <div class="row"><button id="musicStop" class="mini" aria-label="停止试听">■ 停止试听</button></div>
+  </div>
+</section>
+
+<section id="signin" class="screen dim" hidden>
+  <div class="card center signin">
+    <small>每日签到 · 断签不清零</small>
+    <h2>签到领奖励</h2>
+    <p class="note" id="signNote"></p>
+    <div id="signGrid" class="sign-grid"></div>
+    <button id="signGo" class="btn primary">签到</button>
+    <button id="signBack" class="btn ghost">返回</button>
+  </div>
+</section>
+
+<section id="tasks" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>每日任务</h2><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></header>
+    <p class="note">每天 0 点换 3 个新任务，进度开车自动累计；三个都领完再送 💎 10。</p>
+    <ul id="taskList" class="tasks"></ul>
+    <button id="taskBonus" class="btn primary" hidden></button>
+  </div>
+</section>
+
+<section id="drivers" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>车手</h2><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></header>
+    <p class="note">每位车手带一个加成，开局自动生效，和改装叠加。</p>
+    <div id="driverList" class="drivers"></div>
+  </div>
+</section>
+
+<section id="tune" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2 id="tuneTitle">改装</h2><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></header>
+    <p class="note">每项 5 级：1~4 级花金币，满级花 💎 20。改装只对这台车生效。</p>
+    <div id="tuneList" class="parts"></div>
   </div>
 </section>
 
@@ -157,10 +217,13 @@
     <p>所有 NPC <b>变道前都会先打转向灯</b>——看到车尾橙灯闪就是要过来了。带「路怒」性格的会专门加塞到你前面再点刹车。</p>
     <p><b>按喇叭</b>：前车打灯正要挤进你的车道时按，它会放弃；同车道慢车听到会让行；但路怒族可能会报复急刹。</p>
     <h3>操作</h3>
-    <p>键盘：W/S 或 ↑/↓ 油门刹车，A/D 或 ←/→ 转向，Q/E 左右转向灯，H 喇叭，L 大灯，C 切视角，Esc 暂停。</p>
+    <p>键盘：W/S 或 ↑/↓ 油门刹车，A/D 或 ←/→ 转向，Q/E 左右转向灯，H 喇叭，L 大灯，C 切视角 · N 换歌，Esc 暂停。</p>
     <p>手柄：左摇杆转向，RT/LT 油门刹车，LB/RB 转向灯，X 喇叭，Y 切视角。</p>
     <p>触屏：左手拖方向盘（或设置里改成左右键），右手踩油门刹车，可以同时按。</p>
     <p>碰撞按相对速度掉血：轻轻蹭一下只掉一点，高速追尾才会报废。</p>
+    <h3>养成</h3>
+    <p><b>两种货币</b>：🪙 金币（开车赚、路上捡）买车、改装 1~4 级、招普通车手；💎 钻石（签到、每日任务、驾考首次三星 +10、破纪录 +5、公路之王每满 5 公里 +2）招王牌车手、改装满级。</p>
+    <p><b>签到</b>：每天一次，越往后越多，第 7 天 🪙3000 + 💎50 + 送一辆车；之后每天 🪙2000 + 💎30，每逢第 14、21…天再送车。</p>
   </div>
 </section>
 

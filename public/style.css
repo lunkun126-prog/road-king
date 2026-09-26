@@ -65,7 +65,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .dash { position: absolute; left: 0; right: 0; bottom: 0; height: var(--dash-h); padding: 0 12px max(8px, env(safe-area-inset-bottom)); }
 .dash.fp { background: linear-gradient(to bottom, rgba(40, 48, 62, 0) 0, #2b3340 22%, #232a35 100%); border-top-left-radius: 50% 26px; border-top-right-radius: 50% 26px; }
 .dash-row { height: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
-.minibtns { position: absolute; left: 50%; transform: translateX(-50%); top: -48px; display: flex; gap: 8px; }
+.minibtns { position: absolute; right: 12px; top: -48px; display: flex; gap: 8px; }   /* 挪到右侧踏板上方，别挡住画面中间的车 */
 .mini { width: 40px; height: 40px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); font-size: 17px; }
 .mini.on { background: var(--green); color: #032; }
 #bSigL.on, #bSigR.on { background: var(--green); }
@@ -236,3 +236,80 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   #keyhint { display: none; }
   .stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* 开车音乐歌单 */
+.songs { list-style: none; margin: 4px 0 8px; padding: 0; max-height: 38vh; overflow-y: auto; }
+.songs li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.songs li.empty { color: var(--dim); font-size: 13px; }
+.songs label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- 养成：钻石 / 签到 / 任务 / 车手 / 改装 ---------- */
+:root { --gem: #7ad7ff; }
+.wallet { display: flex; gap: 8px; }
+.gems { color: var(--gem); font-weight: 700; }
+.sheet header .chip { padding: 5px 10px; font-size: 13px; }
+.face { font-size: 18px; vertical-align: -2px; }
+.menu-nav { display: grid; grid-template-columns: repeat(4, 1fr); width: min(560px, 100%); }
+.menu-nav button { position: relative; justify-content: center; padding: 10px 8px; }
+.menu-nav .dot { position: absolute; top: 6px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--panel); }
+#music .songs { max-height: none; }
+.signin { width: min(560px, 100%); }
+.sign-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sday { position: relative; padding: 10px 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); border: 2px solid transparent; display: flex; flex-direction: column; gap: 3px; align-items: center; font-size: 13px; }
+.sday small { color: var(--dim); font-size: 11px; }
+.sday b { color: var(--gold); }
+.sday b.g { color: var(--gem); }
+.sday.big { grid-column: span 2; background: linear-gradient(135deg, rgba(181, 49, 31, 0.55), rgba(229, 105, 42, 0.55)); }
+.sday .gift { font-size: 12px; color: #fff3c4; font-weight: 700; }
+.sday.now { border-color: var(--gold); animation: glow 1.2s ease-in-out infinite alternate; }
+.sday.got { opacity: 0.5; }
+.sday i { position: absolute; top: 4px; right: 8px; font-style: normal; color: var(--green); font-weight: 900; }
+@keyframes glow { from { box-shadow: 0 0 0 rgba(255, 201, 60, 0); } to { box-shadow: 0 0 14px rgba(255, 201, 60, 0.7); } }
+.btn:disabled { opacity: 0.5; box-shadow: none; }
+.tasks { list-style: none; padding: 0; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; }
+.tasks li { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); }
+.tasks li.done { background: rgba(255, 201, 60, 0.12); }
+.tasks li.claimed { opacity: 0.5; }
+.tinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tinfo small { color: var(--dim); font-size: 12px; }
+.tinfo .bar, .pips { height: 6px; }
+.tinfo .bar { border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.tinfo .bar i { display: block; height: 100%; background: var(--gold); }
+.act { padding: 7px 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); font-weight: 700; white-space: nowrap; }
+.act.buy { background: var(--gold); color: #3a2a00; }
+.act.cant, .act:disabled { opacity: 0.5; }
+.car .tune-btn { background: rgba(122, 215, 255, 0.15); color: var(--gem); margin-top: 0; }
+.car .tune-btn small { min-height: 0; color: inherit; font-size: 11px; }
+.drivers { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.driver { padding: 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.06); border: 2px solid transparent; display: flex; flex-direction: column; gap: 5px; align-items: center; text-align: center; }
+.driver.sel { border-color: var(--gold); background: rgba(255, 201, 60, 0.1); }
+.driver .avatar { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; font-size: 40px; background: radial-gradient(circle at 35% 30%, #fff5, transparent 60%), var(--c); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35); }
+.driver.locked .avatar { filter: grayscale(0.7) brightness(0.8); }
+.driver b { font: 22px/1 var(--title); }
+.driver .ref { color: #9fb0c6; font-size: 12px; }
+.driver small { color: var(--dim); font-size: 12px; min-height: 32px; }
+.driver .act { width: 100%; }
+.parts { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.part { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); }
+.part em { font-style: normal; font-size: 30px; }
+.pinfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pinfo b { font: 20px/1 var(--title); }
+.pinfo small { color: var(--dim); font-size: 12px; }
+.pips { display: flex; gap: 4px; }
+.pips i { flex: 0 0 22px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); }
+.pips i.on { background: var(--gem); }
+.maxed { color: var(--gem); font-weight: 800; }
+@media (max-width: 480px) {
+  .menu-nav button { flex-direction: column; gap: 2px; font-size: 20px; }
+  .menu-nav span { font-size: 12px; }
+  .sign-grid { gap: 6px; }
+  .sday { font-size: 12px; }
+}
+
+/* 出发页：钱包 + 快捷入口 */
+.setup-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.setup-top .chip { padding: 5px 10px; font-size: 13px; }
+.quick { display: flex; gap: 6px; }
+.quick button { position: relative; padding: 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); font-size: 13px; font-weight: 700; }
+.quick .dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--red); }
+#setupDriver { font: 15px/1.2 var(--body); font-weight: 700; }
