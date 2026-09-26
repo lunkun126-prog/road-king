@@ -40,8 +40,9 @@ export function doSign(p, now = new Date()) {
 // ---------- 车手：各带一个被动加成 ----------
 // img = 圆形头像(透明底)，photo = 详情卡上的整身照；没有图的用 face 的 emoji。bio/traits 只在详情卡里展示
 export const DRIVERS = {
-  ajie:  { id: 'ajie',  name: '阿杰',   face: '🧑', color: '#5a8dee', title: '新手车手',   perk: '没有加成，稳稳开',          cost: null,
-    bio: '刚拿到驾照的新人，开车稳稳当当，梦想是把城里每一条路都跑一遍。', traits: [['爱好', '洗车、听广播'], ['口头禅', '“安全第一！”']] },
+  dudu:  { id: 'dudu',  name: '豆豆',   face: '🐥', img: 'img/dudu_face.png', photo: 'img/dudu.png', color: '#5a8dee', title: '软萌新手', perk: '没有加成，稳稳开', cost: null,
+    bio: '软乎乎的黄色小家伙，圆脑袋、大眼睛，一笑嘴巴就弯成一条线。刚拿到驾照，开车稳稳当当，从不跟人抢道，大家都爱坐它的车。',
+    traits: [['身高', '90 厘米'], ['手感', '软软的，捏一下会回弹'], ['爱好', '晒太阳、洗车'], ['口头禅', '“慢慢开，不着急～”']] },
   kanga: { id: 'kanga', name: '袋袋',   face: '🦘', img: 'img/kangaroo_face.png', photo: 'img/kangaroo.png', color: '#ffb300', title: '胖胖袋鼠', perk: '起步 +10%，极速 +3%', cost: { coins: 800 }, tune: { accel: 1.1, maxV: 1.03 },
     bio: '从澳大利亚跳过来的胖袋鼠，圆滚滚的肚皮、一身亮黄色。别看它胖，后腿一蹬就蹿出去老远，红灯一变绿它总是第一个冲出去。开车时会把零食藏在育儿袋里。',
     traits: [['身高', '1.2 米'], ['体重', '保密（圆滚滚）'], ['爱好', '蹦跶、吃香蕉冰淇淋'], ['口头禅', '“蹦一下就到啦！”']] },
@@ -56,10 +57,12 @@ export const DRIVERS = {
   lin:   { id: 'lin',   name: '林教练', face: '👩‍🏫', color: '#a77bf3', title: '驾校金牌教练', perk: '加速 +8%，驾考通关金币 +50%', cost: { gems: 120 },   tune: { accel: 1.08, examCoinMul: 1.5 },
     bio: '驾校金牌教练，考场上的每一个坑都门儿清，教出的学员一次就过。', traits: [['爱好', '画倒车入库示意图'], ['口头禅', '“离合慢点松！”']] },
 };
-// 老存档：第二位车手「小雪」换成了袋鼠「袋袋」，招募过小雪的直接变成袋袋（不用再花钱）
+export const DEFAULT_DRIVER = 'dudu';   // 免费的第一位车手
+// 老存档：第一位「阿杰」换成了「豆豆」，第二位「小雪」换成了袋鼠「袋袋」，已有的直接换过来（不用再花钱）
+const RENAMED = { ajie: 'dudu', xue: 'kanga' };
 export function migrateDrivers(p) {
-  if (p.drivers?.includes('xue')) p.drivers = [...new Set(p.drivers.map((id) => (id === 'xue' ? 'kanga' : id)))];
-  if (p.driver === 'xue') p.driver = 'kanga';
+  if (p.drivers) p.drivers = [...new Set(p.drivers.map((id) => RENAMED[id] || id))];
+  if (RENAMED[p.driver]) p.driver = RENAMED[p.driver];
   return p;
 }
 
@@ -96,7 +99,7 @@ export function buyDriver(p, id) {
   const d = DRIVERS[id];
   if (!d || (p.drivers || []).includes(id) || !afford(p, d.cost)) return false;
   pay(p, d.cost);
-  (p.drivers ||= ['ajie']).push(id);
+  (p.drivers ||= [DEFAULT_DRIVER]).push(id);
   p.driver = id;
   return true;
 }

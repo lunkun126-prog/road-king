@@ -14,14 +14,17 @@ from PIL import Image, ImageFilter
 from scipy import ndimage
 
 
-def cutout(src_path):
-    im = Image.open(src_path).convert("RGB")
+def cutout(src, foot_sat=0.4, crop=True):
+    """src: 路径或 PIL 图。foot_sat: 最下面 12% 里饱和度低于它的也算背景(袋鼠脚是很饱和的黄，贴脚的阴影带黄色反光)；
+    角色本身颜色浅(饱和度 < 0.4)时传 None 关掉。"""
+    im = (Image.open(src) if isinstance(src, str) else src).convert("RGB")
     a = np.asarray(im).astype(np.float32) / 255
     mx, mn = a.max(axis=2), a.min(axis=2)
     sat = (mx - mn) / np.maximum(mx, 1e-3)
     bg_like = (sat < 0.2) & (mx > 0.55)           # 白底、浅灰/米黄的落地阴影(肚皮浅黄饱和度约 0.3，不会被当成背景)
-    foot = int(a.shape[0] * 0.88)                   # 最下面只有脚(很饱和的黄)，贴着脚、带黄色反光的阴影也算背景
-    bg_like[foot:] |= (sat[foot:] < 0.4) & (mx[foot:] > 0.55)
+    if foot_sat:
+        foot = int(a.shape[0] * 0.88)
+        bg_like[foot:] |= (sat[foot:] < foot_sat) & (mx[foot:] > 0.55)
     lab, _ = ndimage.label(bg_like)
     edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
     bg = np.isin(lab, edge[edge > 0])
@@ -31,7 +34,7 @@ def cutout(src_path):
     alpha = Image.fromarray((fg * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.2))
     out = im.convert("RGBA")
     out.putalpha(alpha)
-    return out.crop(out.getbbox())
+    return out.crop(out.getbbox()) if crop else out
 
 
 def face_crop(full):

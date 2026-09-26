@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as M from '../public/js/meta.js';
 import { createGame, step, VEHICLES } from '../public/js/sim.js';
 
-const fresh = () => ({ coins: 0, gems: 0, owned: ['sedan'], drivers: ['ajie'], driver: 'ajie', upgrades: {}, sign: { days: 0, last: '' }, tasks: null });
+const fresh = () => ({ coins: 0, gems: 0, owned: ['sedan'], drivers: ['dudu'], driver: 'dudu', upgrades: {}, sign: { days: 0, last: '' }, tasks: null });
 const day = (n) => new Date(2026, 8, 25 + n, 10);
 
 test('签到：一天一次，奖励递增，第 7 天两种货币都多并送车，之后每天仍是大档', () => {
@@ -69,9 +69,11 @@ test('车手：招募扣对应货币，加成生效', () => {
   assert.equal(g.timeLeft, 85);
 });
 
-test('车手：老存档里招募过的小雪换成袋鼠袋袋，加成跟着换', () => {
+test('车手：老存档里的阿杰换成豆豆、招募过的小雪换成袋鼠袋袋，加成跟着换', () => {
   const p = M.migrateDrivers({ ...fresh(), drivers: ['ajie', 'xue'], driver: 'xue' });
-  assert.deepEqual(p.drivers, ['ajie', 'kanga']); assert.equal(p.driver, 'kanga');
+  assert.deepEqual(p.drivers, ['dudu', 'kanga']); assert.equal(p.driver, 'kanga');
+  assert.equal(M.migrateDrivers({ drivers: ['ajie'], driver: 'ajie' }).driver, 'dudu');
+  assert.ok(M.DRIVERS.dudu.photo && M.DRIVERS.dudu.img && !M.DRIVERS.dudu.cost, '豆豆免费、有照片');
   assert.equal(M.tuneFor(p, 'sedan').accel, 1.1); assert.equal(M.tuneFor(p, 'sedan').maxV, 1.03);
   assert.ok(M.DRIVERS.kanga.photo && M.DRIVERS.kanga.img && M.DRIVERS.kanga.bio);
 });

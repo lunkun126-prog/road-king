@@ -12,7 +12,7 @@ const $$ = (s) => [...document.querySelectorAll(s)];
 
 // ---------- 存档 ----------
 const DEFAULT = () => ({
-  coins: 0, gems: 0, owned: ['sedan'], drivers: ['ajie'], driver: 'ajie', upgrades: {}, sign: { days: 0, last: '' }, tasks: null, vehicle: 'sedan', exam: {}, best: { king: 0, rampage: 0 }, runs: 0, map: 'city', weather: 'clear',
+  coins: 0, gems: 0, owned: ['sedan'], drivers: [Meta.DEFAULT_DRIVER], driver: Meta.DEFAULT_DRIVER, upgrades: {}, sign: { days: 0, last: '' }, tasks: null, vehicle: 'sedan', exam: {}, best: { king: 0, rampage: 0 }, runs: 0, map: 'city', weather: 'clear',
   settings: { control: 'wheel', sens: 1, cam: 'tp', volume: 0.7, music: { on: true, vol: 0.5, picks: [] } },
   mods: { invincible: false, speed: false, empty: false },
 });
@@ -287,7 +287,7 @@ function openSetup() {
   for (const b of $$('#setupWeather button')) b.classList.toggle('on', b.dataset.v === profile.weather);
   $('#weatherNote').textContent = WX_NOTE[profile.weather] || '';
   $('#setupCar').textContent = (VEHICLES[profile.vehicle] || VEHICLES.sedan).name;
-  const D = Meta.DRIVERS[profile.driver] || Meta.DRIVERS.ajie;
+  const D = Meta.DRIVERS[profile.driver] || Meta.DRIVERS[Meta.DEFAULT_DRIVER];
   $('#setupDriver').innerHTML = `<span class="face">${faceHTML(D)}</span> ${D.name} · ${D.perk}`;
   refreshMenu();
   fromSetup = false;
@@ -346,7 +346,7 @@ function refreshMenu() {
   $('#nameText').textContent = profile.name;
   for (const el of $$('.coinText')) el.textContent = profile.coins;
   for (const el of $$('.gemText')) el.textContent = profile.gems || 0;
-  $('#driverFace').innerHTML = faceHTML(Meta.DRIVERS[profile.driver] || Meta.DRIVERS.ajie);
+  $('#driverFace').innerHTML = faceHTML(Meta.DRIVERS[profile.driver] || Meta.DRIVERS[Meta.DEFAULT_DRIVER]);
   $('#navSign .dot').hidden = !Meta.canSign(profile);
   $('#navTasks .dot').hidden = !Meta.hasTodo(profile);
   $('#qSign .dot').hidden = !Meta.canSign(profile);
@@ -400,7 +400,7 @@ function renderGarage() {
 // ---------- 改装 ----------
 function tuneLv(vid) { const n = Object.keys(Meta.PARTS).reduce((a, k) => a + Meta.partLv(profile, vid, k), 0); return n ? `Lv ${n}/${Object.keys(Meta.PARTS).length * Meta.MAX_LV}` : ''; }
 function renderTune(vid) {
-  const V = VEHICLES[vid], T = Meta.tuneFor({ ...profile, driver: 'ajie' }, vid);   // 只看改装本身，不含车手加成
+  const V = VEHICLES[vid], T = Meta.tuneFor({ ...profile, driver: null }, vid);   // 只看改装本身，不含车手加成
   $('#tuneTitle').textContent = '改装 · ' + V.name;
   const now = { engine: Math.round(V.maxV * T.maxV * 3.6) + ' km/h', turbo: '×' + T.accel.toFixed(2), chassis: '×' + T.steer.toFixed(2), armor: '×' + T.hp.toFixed(2) };
   const box = $('#tuneList');
@@ -418,7 +418,7 @@ function renderTune(vid) {
 // ---------- 车手 ----------
 function faceHTML(d) { return d.img ? `<img src="${d.img}" alt="${d.name}">` : d.face; }   // 有头像图用图，没有用 emoji
 function driverBtn(d) {
-  const own = (profile.drivers || ['ajie']).includes(d.id), sel = profile.driver === d.id;
+  const own = (profile.drivers || [Meta.DEFAULT_DRIVER]).includes(d.id), sel = profile.driver === d.id;
   return sel ? '<button class="act" disabled>出战中</button>' : own ? `<button class="act" data-pick="${d.id}">出战</button>`
     : `<button class="act ${Meta.afford(profile, d.cost) ? 'buy' : 'cant'}" data-buy="${d.id}">${Meta.costText(d.cost)} 招募</button>`;
 }
@@ -433,7 +433,7 @@ function bindDriverBtns(root) {
 function renderDrivers() {
   const box = $('#driverList');
   box.innerHTML = Object.values(Meta.DRIVERS).map((d) => {
-    const own = (profile.drivers || ['ajie']).includes(d.id), sel = profile.driver === d.id;
+    const own = (profile.drivers || [Meta.DEFAULT_DRIVER]).includes(d.id), sel = profile.driver === d.id;
     return `<div class="driver${sel ? ' sel' : ''}${own ? '' : ' locked'}" data-info="${d.id}"><div class="avatar" style="--c:${d.color}">${faceHTML(d)}</div><b>${d.name}</b><span class="ref">${d.title}</span><small>${d.perk}</small><span class="more">详情 ›</span>${driverBtn(d)}</div>`;
   }).join('');
   bindDriverBtns(box);
