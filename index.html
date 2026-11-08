@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0e1422">
+<title>公路之王 Plus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vignette"></div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" hidden>
+  <div class="hud-top">
+    <div id="hudLeft" class="panel hud-left"></div>
+    <div id="nav" class="pill nav">
+      <span class="nav-dir">↑ 直行</span>
+      <span class="tl"><i data-c="red"></i><i data-c="yellow"></i><i data-c="green"></i></span>
+      <b id="navDist">—</b>
+      <b id="navSec" class="nav-sec"></b>
+    </div>
+    <div class="hud-right">
+      <div id="limit" class="limit" hidden>60</div>
+      <button id="btnPause" class="icon-btn" aria-label="暂停">❚❚</button>
+    </div>
+  </div>
+  <div class="mapbox"><canvas id="minimap" width="280" height="280"></canvas><span id="mapLabel"></span></div>
+  <div id="coinHud" class="pill coin-hud">🪙 <b id="coinNum">0</b></div>
+
+
+  <div id="toasts"></div>
+  <div id="bigText"></div>
+  <div id="keyhint">W/S 油门刹车 · A/D 转向 · Q/E 转向灯 · H 喇叭 · L 大灯 · C 切视角 · N 换歌 · Esc 暂停</div>
+
+  <div id="dash" class="dash">
+    <div class="minibtns">
+      <button id="bSigL" class="mini" aria-label="左转向灯">◀</button>
+      <button id="bHorn" class="mini" aria-label="喇叭">📣</button>
+      <button id="bLights" class="mini" aria-label="大灯">💡</button>
+      <button id="bCam" class="mini" aria-label="切换视角">🎥</button>
+      <button id="bSigR" class="mini" aria-label="右转向灯">▶</button>
+    </div>
+    <div class="dash-row">
+      <div class="steer-zone">
+        <div id="wheel" class="wheel">
+          <svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="86" fill="none" stroke="#5a6a80" stroke-width="22"/><circle cx="100" cy="100" r="93" fill="none" stroke="#c9d6e3" stroke-width="3" opacity=".5"/><path d="M100 100 L30 88 M100 100 L170 88 M100 100 L100 180" stroke="#5a6a80" stroke-width="18" stroke-linecap="round"/><circle cx="100" cy="100" r="26" fill="#76869c"/><rect x="95" y="10" width="10" height="16" rx="3" fill="#ffc93c"/></svg>
+        </div>
+        <div id="steerBtns" class="steer-btns" hidden>
+          <button id="bLeft" class="pedal">◀</button>
+          <button id="bRight" class="pedal">▶</button>
+        </div>
+      </div>
+      <div class="gauge">
+        <div class="sig"><i id="sigL">◀</i><i id="sigR">▶</i></div>
+        <div id="speed">0</div><small>km/h</small>
+        <div class="hp"><i id="hpBar"></i></div>
+        <small class="hp-label">完好度</small>
+      </div>
+      <div class="pedals">
+        <button id="pBrake" class="pedal brake">刹车</button>
+        <button id="pGas" class="pedal gas">油门</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 主菜单 ============ -->
+<section id="menu" class="screen">
+  <div class="menu-inner">
+    <div class="topbar">
+      <button id="nameChip" class="chip"><span id="driverFace" class="face">🧑</span> <span id="nameText">车手</span></button>
+      <div class="wallet"><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></div>
+    </div>
+    <h1 class="logo">公路之王<span>Plus</span></h1>
+    <p class="slogan">道路千万条，安全第一条</p>
+    <div class="modes">
+      <button class="mode-card" data-mode="exam"><em>🪪</em><b>驾考模式</b><small>8 关驾照考试 · 雨夜冰雪都有</small><span id="bestExam" class="best"></span></button>
+      <button class="mode-card hot" data-mode="king"><em>🛣️</em><b>公路之王</b><small>城市 / 高速 / 山路 · 捡金币冲榜</small><span id="bestKing" class="best"></span></button>
+      <button class="mode-card" data-mode="rampage"><em>🚛</em><b>大运狂飙</b><small>开重卡 75 秒 · 创飞一切</small><span id="bestRampage" class="best"></span></button>
+      <button class="mode-card duo" data-mode="duo"><em>👥</em><b>双人对战</b><small>一台电脑两个人 · 先到 10 公里终点赢</small></button>
+    </div>
+    <nav class="menu-nav">
+      <button data-go="signin" id="navSign">📅<span>签到</span><i class="dot" hidden></i></button>
+      <button data-go="tasks" id="navTasks">📋<span>任务</span><i class="dot" hidden></i></button>
+      <button data-go="drivers">🧑‍✈️<span>车手</span></button>
+      <button data-go="garage">🚗<span>车库</span></button>
+      <button data-go="music">🎵<span>音乐</span></button>
+      <button data-go="board">🏆<span>排行榜</span></button>
+      <button data-go="settings">⚙️<span>设置</span></button>
+      <button data-go="help">❓<span>玩法</span></button>
+    </nav>
+  </div>
+</section>
+
+<section id="setup" class="screen dim" hidden>
+  <div class="card setup">
+    <div class="setup-top">
+      <div class="wallet"><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></div>
+      <div class="quick">
+        <button data-quick="signin" id="qSign">📅 签到<i class="dot" hidden></i></button>
+        <button data-quick="tasks" id="qTasks">📋 任务<i class="dot" hidden></i></button>
+        <button data-quick="music">🎵 音乐</button>
+      </div>
+    </div>
+    <small>公路之王 · 出发前</small>
+    <h2>选路线</h2>
+    <div id="mapList" class="maps"></div>
+    <div class="seg wx" id="setupWeather"><button data-v="clear">☀️ 晴天</button><button data-v="rain">🌧️ 雨天</button><button data-v="snow">❄️ 下雪</button></div>
+    <p class="note" id="weatherNote"></p>
+    <div class="car-line"><span>车手</span><b id="setupDriver"></b><button id="setupDrivers" class="btn ghost">换人</button></div>
+    <div class="car-line"><span>座驾</span><b id="setupCar"></b><button id="setupGarage" class="btn ghost">换车</button><button id="setupTune" class="btn ghost">🔧 改装</button></div>
+    <button id="setupGo" class="btn primary">出发</button>
+    <button id="setupBack" class="btn ghost">返回</button>
+  </div>
+</section>
+
+<section id="exam" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>驾考模式</h2></header>
+    <div id="levelList" class="levels"></div>
+  </div>
+</section>
+
+<section id="garage" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>车库</h2><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></header>
+    <div id="carList" class="cars"></div>
+    <p class="note">金币靠开车赚、路上捡，钻石靠签到、每日任务、驾考三星、破纪录，没有广告。已拥有的车点「🔧 改装」升级极速 / 加速 / 操控 / 耐撞。车型都是「致敬款」：外形参考真车，名字是虚构的。「大运狂飙」固定开大运重卡。</p>
+  </div>
+</section>
+
+<section id="board" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>排行榜</h2></header>
+    <div class="tabs"><button data-board="king" class="on">公路之王</button><button data-board="rampage">大运狂飙</button></div>
+    <ol id="boardList" class="board"></ol>
+  </div>
+</section>
+
+<section id="settings" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>设置</h2></header>
+    <label class="row">车手名<input id="setName" maxlength="16"></label>
+    <div class="row">触屏转向<div class="seg" id="setControl"><button data-v="wheel">方向盘</button><button data-v="buttons">左右键</button></div></div>
+    <label class="row">转向灵敏度 <span id="sensVal"></span><input id="setSens" type="range" min="0.6" max="1.6" step="0.05"></label>
+    <div class="row">默认视角<div class="seg" id="setCam"><button data-v="tp">追车</button><button data-v="near">近追</button><button data-v="hood">引擎盖</button><button data-v="fp">车内</button></div></div>
+    <label class="row">音量<input id="setVol" type="range" min="0" max="1" step="0.05"></label>
+    <h3>🔧 MOD 工具箱 <small>开了就不上榜</small></h3>
+    <label class="row check"><input type="checkbox" data-mod="invincible"> 无敌：撞谁谁飞，不掉血</label>
+    <label class="row check"><input type="checkbox" data-mod="speed"> 狂飙：极速 ×3.6</label>
+    <label class="row check"><input type="checkbox" data-mod="empty"> 空旷道路：没有车流</label>
+  </div>
+</section>
+
+<section id="music" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>🎵 开车音乐</h2></header>
+    <label class="row check"><input type="checkbox" id="setMusicOn"> 开车时放音乐（开局自动放，N 键换下一首）</label>
+    <label class="row">音乐音量<input id="setMusicVol" type="range" min="0" max="1" step="0.05"></label>
+    <h3>选歌 <small id="musicPicked"></small></h3>
+    <ul id="musicList" class="songs"></ul>
+    <div class="row"><button id="musicStop" class="mini" aria-label="停止试听">■ 停止试听</button></div>
+  </div>
+</section>
+
+<section id="signin" class="screen dim" hidden>
+  <div class="card center signin">
+    <small>每日签到 · 断签不清零</small>
+    <h2>签到领奖励</h2>
+    <p class="note" id="signNote"></p>
+    <div id="signGrid" class="sign-grid"></div>
+    <button id="signGo" class="btn primary">签到</button>
+    <button id="signBack" class="btn ghost">返回</button>
+  </div>
+</section>
+
+<section id="tasks" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>每日任务</h2><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></header>
+    <p class="note">每天 0 点换 3 个新任务，进度开车自动累计；三个都领完再送 💎 10。</p>
+    <ul id="taskList" class="tasks"></ul>
+    <button id="taskBonus" class="btn primary" hidden></button>
+  </div>
+</section>
+
+<section id="drivers" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>车手</h2><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></header>
+    <p class="note">每位车手带一个加成，开局自动生效，和改装叠加。</p>
+    <div id="driverList" class="drivers"></div>
+  </div>
+</section>
+<div id="driverCard" class="dcard-wrap" hidden></div>
+
+<section id="tune" class="screen" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2 id="tuneTitle">改装</h2><div class="chip coins">🪙 <span class="coinText">0</span></div><div class="chip gems">💎 <span class="gemText">0</span></div></header>
+    <p class="note">每项 5 级：1~4 级花金币，满级花 💎 20。改装只对这台车生效。</p>
+    <div id="tuneList" class="parts"></div>
+  </div>
+</section>
+
+<section id="help" class="screen" hidden>
+  <div class="sheet prose">
+    <header><button class="back">‹</button><h2>玩法</h2></header>
+    <h3>四种模式</h3>
+    <p><b>双人对战</b>：一台电脑两个人左右分屏，1P 用 W A S D、2P 用方向键（插两个手柄也行）。同一条路上比谁先冲过 10 公里终点；两个人能互相撞，车撞毁了原地等 3 秒复活。</p>
+    <p><b>驾考模式</b>：8 关，100 分起扣，90 分及格。闯红灯、撞车、撞到行人直接挂科；超速、不打灯变道、蹭护栏、撞锥桶各扣分。满分三星。</p>
+    <p><b>公路之王</b>：三条路线——<b>城市主干道</b>（车多、红绿灯、行人）、<b>滨海高速</b>（车少没红绿灯，放开跑）、<b>盘山公路</b>（几乎没车，急弯连坡）。越快分越高；贴着车超过去叫「擦肩」，4 秒内连续擦肩叠连击，最高 ×10。路上的金币一枚 5 金币。撞到行人扣 800 分。</p>
+    <p><b>天气</b>：雨天刹车变长、稍滑；<b>下雪路面很滑</b>，转向跟手慢、刹车距离接近翻倍，要提前减速。</p>
+    <p><b>大运狂飙</b>：75 秒开大运，每创飞一辆 +1.5 秒，3 秒内连撞叠连击。</p>
+    <h3>读懂别人的车</h3>
+    <p>所有 NPC <b>变道前都会先打转向灯</b>——看到车尾橙灯闪就是要过来了。带「路怒」性格的会专门加塞到你前面再点刹车。</p>
+    <p><b>按喇叭</b>：前车打灯正要挤进你的车道时按，它会放弃；同车道慢车听到会让行；但路怒族可能会报复急刹。</p>
+    <h3>操作</h3>
+    <p>键盘：W/S 或 ↑/↓ 油门刹车，A/D 或 ←/→ 转向，Q/E 左右转向灯，H 喇叭，L 大灯，C 切视角 · N 换歌，Esc 暂停。</p>
+    <p>手柄：左摇杆转向，RT/LT 油门刹车，LB/RB 转向灯，X 喇叭，Y 切视角。</p>
+    <p>触屏：左手拖方向盘（或设置里改成左右键），右手踩油门刹车，可以同时按。</p>
+    <p>碰撞按相对速度掉血：轻轻蹭一下只掉一点，高速追尾才会报废。</p>
+    <h3>养成</h3>
+    <p><b>两种货币</b>：🪙 金币（开车赚、路上捡）买车、改装 1~4 级、招普通车手；💎 钻石（签到、每日任务、驾考首次三星 +10、破纪录 +5、公路之王每满 5 公里 +2）招王牌车手、改装满级。</p>
+    <p><b>签到</b>：每天一次，越往后越多，第 7 天 🪙3000 + 💎50 + 送一辆车；之后每天 🪙2000 + 💎30，每逢第 14、21…天再送车。</p>
+  </div>
+</section>
+
+<section id="brief" class="screen dim" hidden>
+  <div class="card center">
+    <small id="briefTag">驾考 · 第 1 关</small>
+    <h2 id="briefTitle"></h2>
+    <p id="briefTip"></p>
+    <button id="briefGo" class="btn primary">开始考试</button>
+    <button id="briefBack" class="btn ghost">返回</button>
+  </div>
+</section>
+
+<!-- ============ 双人对战：选路线 / 天气 / 各自的车 ============ -->
+<section id="duoSetup" class="screen dim" hidden>
+  <div class="sheet">
+    <header><button class="back">‹</button><h2>双人对战</h2></header>
+    <p class="note">一台电脑两个人，左右分屏：<span class="ptag p1">1P</span> 在左边，用 <b>W A S D</b>；<span class="ptag p2">2P</span> 在右边，用 <b>↑ ↓ ← →</b>。同一条路，谁先冲过 <b>10 公里</b>终点谁赢。车随便选，两个人可以选同一辆（不带车手加成和改装，不算金币和排行榜）。</p>
+    <h3>选路线</h3>
+    <div id="duoMaps" class="maps"></div>
+    <div class="seg wx" id="duoWeather"><button data-v="clear">☀️ 晴天</button><button data-v="rain">🌧️ 雨天</button><button data-v="snow">❄️ 下雪</button></div>
+    <div class="duo-picks">
+      <div><h3><span class="ptag p1">1P</span> 左边 · W A S D</h3><div id="duoCars0" class="duo-cars"></div></div>
+      <div><h3><span class="ptag p2">2P</span> 右边 · ↑ ↓ ← →</h3><div id="duoCars1" class="duo-cars"></div></div>
+    </div>
+    <button id="duoGo" class="btn primary">开始对战</button>
+  </div>
+</section>
+
+<!-- 双人分屏 HUD：中间分隔线，两边各一块仪表，顶上是比赛进度条 -->
+<div id="duoHud" hidden>
+  <div class="duo-split"></div>
+  <div class="duo-race"><div class="duo-track"><i class="flag">🏁</i><b id="duoDot0" class="dot p1">1P</b><b id="duoDot1" class="dot p2">2P</b></div></div>
+  <button id="duoPause" class="icon-btn" aria-label="暂停">❚❚</button>
+  <div id="duoToasts0" class="duo-toasts"></div>
+  <div id="duoToasts1" class="duo-toasts right"></div>
+  <div id="duoP0" class="duo-side p1"></div>
+  <div id="duoP1" class="duo-side p2"></div>
+  <div id="duoBig"></div>
+  <div id="duoKeys"><span class="ptag p1">1P</span> W A S D　　<span class="ptag p2">2P</span> ↑ ↓ ← →　　Esc 暂停 · C 切视角</div>
+</div>
+
+<section id="pause" class="screen dim" hidden>
+  <div class="card center">
+    <h2>暂停</h2>
+    <button id="pResume" class="btn primary">继续</button>
+    <button id="pRestart" class="btn">重来</button>
+    <button id="pQuit" class="btn ghost">回主菜单</button>
+  </div>
+</section>
+
+<section id="result" class="screen dim" hidden>
+  <div class="card center result">
+    <small id="rTag"></small>
+    <h2 id="rTitle"></h2>
+    <div id="rStars" class="stars"></div>
+    <div id="rScore" class="big"></div>
+    <div id="rStats" class="stats"></div>
+    <ul id="rLog" class="log"></ul>
+    <div id="rReward" class="reward"></div>
+    <div class="btns">
+      <button id="rNext" class="btn primary" hidden>下一关</button>
+      <button id="rRetry" class="btn primary">再来一局</button>
+      <button id="rMenu" class="btn ghost">主菜单</button>
+    </div>
+  </div>
+</section>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
